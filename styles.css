@@ -112,6 +112,17 @@ body {
   font-size: 11px;
 }
 
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
 .formatbar {
   display: flex;
   align-items: center;
@@ -119,6 +130,27 @@ body {
   padding: 8px 16px;
   border-bottom: 1px solid var(--ui-border);
   background: var(--ui-panel);
+  flex-wrap: wrap;
+}
+
+.format-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-bg);
+}
+
+.heading-select {
+  height: 26px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  background: var(--ui-panel);
+  color: var(--ui-text);
+  font-size: 12px;
 }
 
 .zoom {
@@ -138,7 +170,7 @@ body {
 .workspace {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: var(--editor-width, 1fr) 6px 1fr;
   overflow: hidden;
 }
 
@@ -156,6 +188,17 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+.splitter {
+  width: 6px;
+  cursor: col-resize;
+  background: var(--ui-border);
+}
+
+.workspace[data-view="edit"] .splitter,
+.workspace[data-view="preview"] .splitter {
+  display: none;
 }
 
 .preview-pane {
@@ -226,6 +269,13 @@ body {
   display: none;
 }
 
+#settingsModal.modal-overlay {
+  justify-content: flex-end;
+  align-items: stretch;
+  background: transparent;
+  pointer-events: none;
+}
+
 .modal,
 .panel {
   background: var(--ui-panel);
@@ -243,12 +293,24 @@ body {
   flex-direction: column;
 }
 
+.settings-panel {
+  width: min(260px, 20vw);
+  height: 100vh;
+  max-height: none;
+  border-radius: 16px 0 0 16px;
+  pointer-events: auto;
+}
+
+body.settings-open .workspace {
+  margin-right: min(260px, 20vw);
+}
+
 .panel-body {
-  padding: 16px 24px 32px;
+  padding: 20px 24px 32px;
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .modal-header,
@@ -258,6 +320,12 @@ body {
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--ui-border);
+}
+
+.panel-header h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
 }
 
 .modal-body {
@@ -315,27 +383,63 @@ body {
   gap: 8px;
 }
 
-details {
+.settings-accordion {
   border: 1px solid var(--ui-border);
-  border-radius: 10px;
-  padding: 12px 16px;
+  border-radius: 14px;
   background: var(--ui-bg);
+  padding: 6px;
 }
 
-summary {
+.settings-accordion + .settings-accordion {
+  margin-top: 6px;
+}
+
+.settings-accordion summary {
   font-weight: 700;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f3f3f3;
+  list-style: none;
+}
+
+.settings-accordion summary::before {
+  content: "▶";
+  font-size: 12px;
+  color: var(--ui-muted);
+  transition: transform 0.2s ease;
+}
+
+.settings-accordion[open] summary {
+  background: #f7f7f7;
+}
+
+.settings-accordion[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.settings-accordion summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-accordion > .field,
+.settings-accordion > .field-grid,
+.settings-accordion > .checkbox {
+  margin: 12px 8px;
 }
 
 .field {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 10px;
 }
 
 .field label {
-  min-width: 90px;
+  min-width: 110px;
+  color: #333;
 }
 
 .field input,
@@ -345,21 +449,22 @@ summary {
   border-radius: 6px;
   background: var(--ui-panel);
   color: var(--ui-text);
+  min-width: 160px;
 }
 
 .field-grid {
   display: grid;
   grid-template-columns: 60px 1fr 60px 1fr;
   gap: 8px 12px;
-  margin-top: 10px;
   align-items: center;
+  padding: 6px 4px 10px;
 }
 
 .checkbox {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 8px;
+  padding: 6px 4px;
 }
 
 .brand-block {

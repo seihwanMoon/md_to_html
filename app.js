@@ -134,10 +134,15 @@ const helpModal = document.getElementById("helpModal");
 const helpTitle = document.getElementById("helpTitle");
 const helpDesc = document.getElementById("helpDesc");
 const helpStep = document.getElementById("helpStep");
+const splitter = document.getElementById("splitter");
 
 let settings = loadSettings();
 let zoom = 1;
 let helpIndex = 0;
+let isApplyingHistory = false;
+let historySnapshot = null;
+const undoStack = [];
+const redoStack = [];
 
 const md = window.markdownit({
   html: true,
@@ -180,11 +185,13 @@ function initialize() {
   bindSettings();
   bindPreset();
   bindModals();
+  bindSplitter();
   updateLineNumbers();
   updateStatus();
   updatePreview();
   updateThemeLabel();
   updateZoomLabel();
+  historySnapshot = createSnapshot();
 }
 
 function bindToolbar() {
@@ -204,11 +211,25 @@ function bindToolbar() {
     button.addEventListener("click", () => handleAction(button.dataset.action));
   });
 
+  const headingSelect = document.getElementById("headingLevel");
+  if (headingSelect) {
+    headingSelect.addEventListener("change", () => {
+      setHeadingLevel(Number(headingSelect.value));
+    });
+  }
+
   editor.addEventListener("input", () => {
+    if (!isApplyingHistory) {
+      pushHistorySnapshot();
+    }
     saveMarkdown(editor.value);
     updateLineNumbers();
     updateStatus();
     updatePreview();
+    if (!isApplyingHistory) {
+      historySnapshot = createSnapshot();
+      redoStack.length = 0;
+    }
   });
 
   editor.addEventListener("click", updateStatus);
@@ -336,12 +357,10 @@ function handleAction(action) {
       openPrintWindow();
       break;
     case "undo":
-      editor.focus();
-      document.execCommand("undo");
+      undo();
       break;
     case "redo":
-      editor.focus();
-      document.execCommand("redo");
+      redo();
       break;
     case "toggle-theme":
       toggleTheme();
@@ -394,7 +413,6 @@ function handleInsert(type) {
     strike: { open: "~~", close: "~~" },
     "inline-code": { open: "`", close: "`" },
     paragraph: { open: "\n\n", close: "" },
-    heading: { open: "\n# ", close: "" },
     ul: { open: "\n- ", close: "" },
     ol: { open: "\n1. ", close: "" },
     checklist: { open: "\n- [ ] ", close: "" },
@@ -416,6 +434,7 @@ function handleInsert(type) {
 }
 
 function insertAtCursor(openText, closeText) {
+  pushHistorySnapshot();
   const start = editor.selectionStart;
   const end = editor.selectionEnd;
   const before = editor.value.slice(0, start);
@@ -429,6 +448,106 @@ function insertAtCursor(openText, closeText) {
   updateLineNumbers();
   updateStatus();
   updatePreview();
+  historySnapshot = createSnapshot();
+  redoStack.length = 0;
+}
+
+function setHeadingLevel(level) {
+  pushHistorySnapshot();
+  const text = editor.value;
+  const cursor = editor.selectionStart;
+  const lineStart = text.lastIndexOf("\n", cursor - 1) + 1;
+  const lineEnd = text.indexOf("\n", cursor);
+  const end = lineEnd === -1 ? text.length : lineEnd;
+  const line = text.slice(lineStart, end);
+  const stripped = line.replace(/^#{1,6}\s+/, "");
+  const prefix = level === 0 ? "" : `${"#".repeat(level)} `;
+  const updatedLine = `${prefix}${stripped}`;
+  editor.value = `${text.slice(0, lineStart)}${updatedLine}${text.slice(end)}`;
+  const newCursor = lineStart + prefix.length + (cursor - lineStart);
+  editor.selectionStart = newCursor;
+  editor.selectionEnd = newCursor;
+  editor.focus();
+  saveMarkdown(editor.value);
+  updateLineNumbers();
+  updateStatus();
+  updatePreview();
+  historySnapshot = createSnapshot();
+  redoStack.length = 0;
+}
+
+function createSnapshot() {
+  return {
+    value: editor.value,
+    start: editor.selectionStart,
+    end: editor.selectionEnd,
+  };
+}
+
+function pushHistorySnapshot() {
+  if (!historySnapshot) {
+    historySnapshot = createSnapshot();
+    return;
+  }
+  if (historySnapshot.value === editor.value) return;
+  undoStack.push(historySnapshot);
+  if (undoStack.length > 200) {
+    undoStack.shift();
+  }
+}
+
+function applySnapshot(snapshot) {
+  isApplyingHistory = true;
+  editor.value = snapshot.value;
+  editor.selectionStart = snapshot.start;
+  editor.selectionEnd = snapshot.end;
+  saveMarkdown(editor.value);
+  updateLineNumbers();
+  updateStatus();
+  updatePreview();
+  historySnapshot = createSnapshot();
+  isApplyingHistory = false;
+}
+
+function undo() {
+  if (!undoStack.length) return;
+  const current = createSnapshot();
+  const prev = undoStack.pop();
+  redoStack.push(current);
+  applySnapshot(prev);
+}
+
+function redo() {
+  if (!redoStack.length) return;
+  const current = createSnapshot();
+  const next = redoStack.pop();
+  undoStack.push(current);
+  applySnapshot(next);
+}
+
+function bindSplitter() {
+  if (!splitter) return;
+  let isDragging = false;
+  splitter.addEventListener("mousedown", (event) => {
+    isDragging = true;
+    document.body.style.cursor = "col-resize";
+    event.preventDefault();
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!isDragging) return;
+    isDragging = false;
+    document.body.style.cursor = "";
+  });
+
+  window.addEventListener("mousemove", (event) => {
+    if (!isDragging) return;
+    const bounds = document.querySelector(".workspace").getBoundingClientRect();
+    const minWidth = 260;
+    const maxWidth = bounds.width - 260;
+    const nextWidth = Math.min(maxWidth, Math.max(minWidth, event.clientX - bounds.left));
+    document.querySelector(".workspace").style.setProperty("--editor-width", `${nextWidth}px`);
+  });
 }
 
 function setView(view) {
@@ -874,6 +993,9 @@ function openModal(name) {
     help: helpModal,
   };
   map[name].hidden = false;
+  if (name === "settings") {
+    document.body.classList.add("settings-open");
+  }
   if (name === "preset") {
     renderPresets();
   }
@@ -887,6 +1009,9 @@ function closeModal(name) {
     help: helpModal,
   };
   map[name].hidden = true;
+  if (name === "settings") {
+    document.body.classList.remove("settings-open");
+  }
 }
 
 function openHelp(index) {

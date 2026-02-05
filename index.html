@@ -39,16 +39,6 @@
             <button class="btn" data-action="export-pdf">PDF</button>
           </div>
           <div class="group">
-            <button class="btn" data-action="undo">되돌리기</button>
-            <button class="btn" data-action="redo">다시 실행</button>
-            <button class="btn" data-insert="table">표</button>
-            <button class="btn" data-insert="hr">수평선</button>
-            <button class="btn" data-insert="code-block">코드 블록</button>
-            <button class="btn" data-insert="quote">인용</button>
-            <button class="btn" data-insert="link">링크</button>
-            <button class="btn" data-insert="image">이미지</button>
-          </div>
-          <div class="group">
             <button class="btn" data-view="edit">편집</button>
             <button class="btn active" data-view="split">분할</button>
             <button class="btn" data-view="preview">미리보기</button>
@@ -61,15 +51,34 @@
         </div>
       </header>
       <div class="formatbar">
-        <button class="btn small" data-insert="paragraph">본문</button>
-        <button class="btn small" data-insert="bold">B</button>
-        <button class="btn small" data-insert="italic">I</button>
-        <button class="btn small" data-insert="strike">S</button>
-        <button class="btn small" data-insert="inline-code">`</button>
-        <button class="btn small" data-insert="heading">H</button>
-        <button class="btn small" data-insert="ul">• 목록</button>
-        <button class="btn small" data-insert="ol">1. 목록</button>
-        <button class="btn small" data-insert="checklist">체크리스트</button>
+        <div class="format-group">
+          <select class="heading-select" id="headingLevel">
+            <option value="0">본문</option>
+            <option value="1">제목 1</option>
+            <option value="2">제목 2</option>
+            <option value="3">제목 3</option>
+            <option value="4">제목 4</option>
+            <option value="5">제목 5</option>
+            <option value="6">제목 6</option>
+          </select>
+          <button class="btn small" data-insert="bold">B</button>
+          <button class="btn small" data-insert="italic">I</button>
+          <button class="btn small" data-insert="strike">S</button>
+          <button class="btn small" data-insert="inline-code">`</button>
+        </div>
+        <div class="format-group">
+          <button class="btn small" data-action="undo">되돌리기</button>
+          <button class="btn small" data-action="redo">다시 실행</button>
+          <button class="btn small" data-insert="table">표</button>
+          <button class="btn small" data-insert="hr">수평선</button>
+          <button class="btn small" data-insert="code-block">코드 블록</button>
+          <button class="btn small" data-insert="quote">인용</button>
+          <button class="btn small" data-insert="link">링크</button>
+          <button class="btn small" data-insert="image">이미지</button>
+          <button class="btn small" data-insert="checklist">체크리스트</button>
+          <button class="btn small" data-insert="ul">• 목록</button>
+          <button class="btn small" data-insert="ol">1. 목록</button>
+        </div>
         <div class="zoom">
           <button class="btn small" data-action="zoom-out">-</button>
           <span class="zoom-label" id="zoomLabel">100%</span>
@@ -86,6 +95,7 @@
           ></textarea>
           <div class="statusbar" id="statusbar">줄 1, 열 1 · 0줄 · 0자 · Markdown</div>
         </section>
+        <div class="splitter" id="splitter"></div>
         <section class="preview-pane">
           <iframe id="previewFrame" title="미리보기"></iframe>
         </section>
@@ -166,13 +176,13 @@
     </div>
 
     <div class="modal-overlay" id="settingsModal" hidden>
-      <div class="panel">
+      <div class="panel settings-panel">
         <div class="panel-header">
           <h3>문서 설정</h3>
-          <button class="btn small" data-close="settings">✕</button>
+          <button class="btn small icon-btn" data-close="settings">✕</button>
         </div>
         <div class="panel-body">
-          <details open>
+          <details class="settings-accordion" open>
             <summary>글꼴</summary>
             <div class="field">
               <label>폰트</label>
@@ -208,7 +218,7 @@
             </div>
           </details>
 
-          <details>
+          <details class="settings-accordion">
             <summary>여백</summary>
             <div class="field-grid">
               <label>상단</label>
@@ -222,7 +232,7 @@
             </div>
           </details>
 
-          <details>
+          <details class="settings-accordion">
             <summary>표 스타일</summary>
             <div class="field">
               <label>테두리 스타일</label>
@@ -232,7 +242,7 @@
             </div>
           </details>
 
-          <details>
+          <details class="settings-accordion">
             <summary>제목 스타일</summary>
             <div class="field">
               <label>스타일</label>
@@ -243,7 +253,7 @@
             </div>
           </details>
 
-          <details>
+          <details class="settings-accordion">
             <summary>페이지 나누기</summary>
             <label class="checkbox">
               <input type="checkbox" id="breakH1" /> H1 앞에서 나누기
@@ -256,7 +266,7 @@
             </label>
           </details>
 
-          <details>
+          <details class="settings-accordion">
             <summary>특수 페이지</summary>
             <label class="checkbox">
               <input type="checkbox" id="coverPage" /> 표지 페이지
@@ -269,7 +279,7 @@
             </label>
           </details>
 
-          <details>
+          <details class="settings-accordion">
             <summary>헤더</summary>
             <label class="checkbox">
               <input type="checkbox" id="headerEnabled" /> 헤더 사용
@@ -301,7 +311,7 @@
             </div>
           </details>
 
-          <details>
+          <details class="settings-accordion">
             <summary>푸터</summary>
             <label class="checkbox">
               <input type="checkbox" id="footerEnabled" /> 푸터 사용
@@ -333,7 +343,7 @@
             </div>
           </details>
 
-          <details>
+          <details class="settings-accordion">
             <summary>기타</summary>
             <label class="checkbox">
               <input type="checkbox" id="convertBreaks" /> 줄바꿈 변환
