@@ -14,6 +14,10 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tomorrow.min.css"
     />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css"
+    />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body data-theme="light">
@@ -37,12 +41,14 @@
           <div class="group">
             <button class="btn" data-action="export-html">HTML</button>
             <button class="btn" data-action="export-pdf">PDF</button>
+            <button class="btn" data-action="copy-html">복사</button>
           </div>
           <div class="group">
             <button class="btn" data-view="edit">편집</button>
             <button class="btn active" data-view="split">분할</button>
             <button class="btn" data-view="preview">미리보기</button>
           </div>
+          <button class="btn" data-action="share">공유</button>
           <button class="btn" data-action="toggle-theme">라이트</button>
           <button class="btn" data-action="help">도움말</button>
           <button class="btn" data-action="preset">프리셋</button>
@@ -83,6 +89,20 @@
           <button class="btn small" data-action="zoom-out">-</button>
           <span class="zoom-label" id="zoomLabel">100%</span>
           <button class="btn small" data-action="zoom-in">+</button>
+        </div>
+      </div>
+      <div class="search-bar" id="searchBar" hidden>
+        <div class="search-row">
+          <input type="text" id="searchInput" placeholder="검색..." />
+          <span class="search-count" id="searchCount"></span>
+          <button class="btn small" data-action="search-prev">▲</button>
+          <button class="btn small" data-action="search-next">▼</button>
+          <button class="btn small" data-action="search-close">✕</button>
+        </div>
+        <div class="replace-row" id="replaceRow" hidden>
+          <input type="text" id="replaceInput" placeholder="치환..." />
+          <button class="btn small" data-action="replace-one">치환</button>
+          <button class="btn small" data-action="replace-all">모두 치환</button>
         </div>
       </div>
       <main class="workspace" data-view="split">
@@ -365,10 +385,24 @@
       </div>
     </div>
 
+    <div class="modal-overlay" id="templateModal" hidden>
+      <div class="modal">
+        <div class="modal-header">
+          <h3>템플릿 선택</h3>
+          <button class="btn small" data-close="template">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="template-list" id="templateList"></div>
+        </div>
+      </div>
+    </div>
+
     <input type="file" id="fileInput" accept=".md,.txt" hidden />
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/13.0.2/markdown-it.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.4.1/mermaid.min.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

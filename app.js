@@ -130,6 +130,7 @@ const settingsModal = document.getElementById("settingsModal");
 const infoModal = document.getElementById("infoModal");
 const presetModal = document.getElementById("presetModal");
 const helpModal = document.getElementById("helpModal");
+const templateModal = document.getElementById("templateModal");
 
 const helpTitle = document.getElementById("helpTitle");
 const helpDesc = document.getElementById("helpDesc");
@@ -141,6 +142,10 @@ let zoom = 1;
 let helpIndex = 0;
 let isApplyingHistory = false;
 let historySnapshot = null;
+let previewTimer = null;
+let saveIndicatorTimer = null;
+let searchMatches = [];
+let searchIndex = -1;
 const undoStack = [];
 const redoStack = [];
 
@@ -150,6 +155,9 @@ const md = window.markdownit({
   typographer: true,
   breaks: settings.convertBreaks,
   highlight(code, lang) {
+    if (lang === "mermaid") {
+      return `<div class="mermaid">${escapeHtml(code)}</div>`;
+    }
     if (!settings.enableHighlight) {
       return "";
     }
@@ -177,21 +185,80 @@ md.renderer.rules.heading_open = function (tokens, idx, options, env, self) {
   return originalHeadingOpen(tokens, idx, options, env, self);
 };
 
+function renderFootnotes(html) {
+  const footnotes = [];
+  let index = 0;
+  html = html.replace(/\[\^([^\]]+?)\]:\s*(.+)/g, (_, id, text) => {
+    footnotes.push({ id, text: text.trim() });
+    return "";
+  });
+  html = html.replace(/\[\^([^\]]+?)\]/g, (_, id) => {
+    index += 1;
+    return `<sup class="footnote-ref"><a href="#fn-${id}" id="fnref-${id}">[${index}]</a></sup>`;
+  });
+  if (footnotes.length > 0) {
+    const footnotesHtml = footnotes
+      .map((fn, i) =>
+        `<li id="fn-${fn.id}"><p>${fn.text} <a href="#fnref-${fn.id}" class="footnote-backref">↩</a></p></li>`
+      )
+      .join("\n");
+    html += `\n<hr class="footnotes-sep">\n<section class="footnotes">\n<ol>\n${footnotesHtml}\n</ol>\n</section>`;
+  }
+  return html;
+}
+
+function renderKatex(html) {
+  if (typeof katex === "undefined") return html;
+  html = html.replace(/\$\$([^$]+?)\$\$/g, (_, expr) => {
+    try {
+      return katex.renderToString(expr.trim(), { displayMode: true, throwOnError: false });
+    } catch (e) {
+      return `<span class="katex-error">${escapeHtml(expr)}</span>`;
+    }
+  });
+  html = html.replace(/\$([^$\n]+?)\$/g, (_, expr) => {
+    try {
+      return katex.renderToString(expr.trim(), { displayMode: false, throwOnError: false });
+    } catch (e) {
+      return `<span class="katex-error">${escapeHtml(expr)}</span>`;
+    }
+  });
+  return html;
+}
+
 initialize();
 
 function initialize() {
-  editor.value = loadMarkdown();
+  if (!loadFromUrlParam()) {
+    editor.value = loadMarkdown();
+  }
   bindToolbar();
   bindSettings();
   bindPreset();
   bindModals();
   bindSplitter();
+  bindAccordion();
+  initEmojiAutocomplete();
   updateLineNumbers();
   updateStatus();
   updatePreview();
   updateThemeLabel();
   updateZoomLabel();
   historySnapshot = createSnapshot();
+}
+
+function bindAccordion() {
+  const accordions = document.querySelectorAll(".settings-accordion");
+  accordions.forEach((details) => {
+    details.addEventListener("toggle", () => {
+      if (!details.open) return;
+      accordions.forEach((other) => {
+        if (other !== details) {
+          other.open = false;
+        }
+      });
+    });
+  });
 }
 
 function bindToolbar() {
@@ -225,7 +292,7 @@ function bindToolbar() {
     saveMarkdown(editor.value);
     updateLineNumbers();
     updateStatus();
-    updatePreview();
+    debouncedPreview();
     if (!isApplyingHistory) {
       historySnapshot = createSnapshot();
       redoStack.length = 0;
@@ -235,6 +302,143 @@ function bindToolbar() {
   editor.addEventListener("click", updateStatus);
   editor.addEventListener("keyup", updateStatus);
   editor.addEventListener("scroll", syncLineScroll);
+
+  editor.addEventListener("keydown", handleEditorKeydown);
+  editor.addEventListener("paste", handleEditorPaste);
+  editor.addEventListener("dragover", (event) => { event.preventDefault(); });
+  editor.addEventListener("drop", handleEditorDrop);
+}
+
+function handleEditorPaste(event) {
+  const items = event.clipboardData && event.clipboardData.items;
+  if (!items) return;
+  for (let i = 0; i < items.length; i += 1) {
+    if (items[i].type.startsWith("image/")) {
+      event.preventDefault();
+      const file = items[i].getAsFile();
+      if (file) insertImageAsBase64(file);
+      return;
+    }
+  }
+}
+
+function handleEditorDrop(event) {
+  event.preventDefault();
+  const files = event.dataTransfer && event.dataTransfer.files;
+  if (!files || !files.length) return;
+  const file = files[0];
+  if (file.type.startsWith("image/")) {
+    insertImageAsBase64(file);
+  } else if (file.name.endsWith(".md") || file.name.endsWith(".txt")) {
+    file.text().then((text) => {
+      editor.value = text;
+      saveMarkdown(editor.value);
+      updateLineNumbers();
+      updateStatus();
+      updatePreview();
+    });
+  }
+}
+
+function insertImageAsBase64(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const dataUrl = reader.result;
+    const mdImage = `![${file.name}](${dataUrl})`;
+    const start = editor.selectionStart;
+    const before = editor.value.slice(0, start);
+    const after = editor.value.slice(editor.selectionEnd);
+    editor.value = `${before}${mdImage}${after}`;
+    editor.selectionStart = start + mdImage.length;
+    editor.selectionEnd = start + mdImage.length;
+    editor.focus();
+    saveMarkdown(editor.value);
+    updateLineNumbers();
+    updateStatus();
+    updatePreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleEditorKeydown(event) {
+  const ctrl = event.ctrlKey || event.metaKey;
+
+  if (ctrl && !event.shiftKey) {
+    switch (event.key.toLowerCase()) {
+      case "b":
+        event.preventDefault();
+        handleInsert("bold");
+        return;
+      case "i":
+        event.preventDefault();
+        handleInsert("italic");
+        return;
+      case "s":
+        event.preventDefault();
+        downloadFile("document.md", editor.value);
+        return;
+      case "z":
+        event.preventDefault();
+        undo();
+        return;
+      case "y":
+        event.preventDefault();
+        redo();
+        return;
+    }
+  }
+
+  if (ctrl && event.shiftKey) {
+    switch (event.key.toLowerCase()) {
+      case "k":
+        event.preventDefault();
+        handleInsert("code-block");
+        return;
+      case "x":
+        event.preventDefault();
+        handleInsert("strike");
+        return;
+    }
+  }
+
+  if (event.key === "Tab") {
+    event.preventDefault();
+    const start = editor.selectionStart;
+    const end = editor.selectionEnd;
+    const text = editor.value;
+
+    if (start === end) {
+      if (event.shiftKey) {
+        const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+        if (text.startsWith("  ", lineStart)) {
+          editor.value = text.slice(0, lineStart) + text.slice(lineStart + 2);
+          editor.selectionStart = Math.max(lineStart, start - 2);
+          editor.selectionEnd = editor.selectionStart;
+        }
+      } else {
+        editor.value = text.slice(0, start) + "  " + text.slice(end);
+        editor.selectionStart = start + 2;
+        editor.selectionEnd = start + 2;
+      }
+    } else {
+      const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+      const selectedBlock = text.slice(lineStart, end);
+      let result;
+      if (event.shiftKey) {
+        result = selectedBlock.replace(/^  /gm, "");
+      } else {
+        result = selectedBlock.replace(/^/gm, "  ");
+      }
+      editor.value = text.slice(0, lineStart) + result + text.slice(end);
+      editor.selectionStart = lineStart;
+      editor.selectionEnd = lineStart + result.length;
+    }
+
+    saveMarkdown(editor.value);
+    updateLineNumbers();
+    updateStatus();
+    updatePreview();
+  }
 }
 
 function bindSettings() {
@@ -319,27 +523,40 @@ function bindModals() {
       if (id === "infoModal") closeModal("info");
       if (id === "presetModal") closeModal("preset");
       if (id === "helpModal") closeModal("help");
+      if (id === "templateModal") closeModal("template");
     });
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    closeModal("settings");
-    closeModal("info");
-    closeModal("preset");
-    closeModal("help");
+    const ctrl = event.ctrlKey || event.metaKey;
+    if (ctrl && event.key.toLowerCase() === "f") {
+      event.preventDefault();
+      openSearchBar(false);
+      return;
+    }
+    if (ctrl && event.key.toLowerCase() === "h") {
+      event.preventDefault();
+      openSearchBar(true);
+      return;
+    }
+    if (event.key === "Escape") {
+      const searchBar = document.getElementById("searchBar");
+      if (searchBar && !searchBar.hidden) {
+        closeSearchBar();
+        return;
+      }
+      closeModal("settings");
+      closeModal("info");
+      closeModal("preset");
+      closeModal("help");
+      closeModal("template");
+    }
   });
 }
 
 function handleAction(action) {
   switch (action) {
     case "new":
-      if (confirm("새 문서를 시작할까요?")) {
-        editor.value = DEFAULT_MARKDOWN;
-        saveMarkdown(editor.value);
-        updateLineNumbers();
-        updateStatus();
-        updatePreview();
-      }
+      openModal("template");
       break;
     case "folder":
       alert("브라우저 환경에서는 폴더 연결을 지원하지 않습니다.");
@@ -356,11 +573,17 @@ function handleAction(action) {
     case "export-pdf":
       openPrintWindow();
       break;
+    case "copy-html":
+      copyHtmlToClipboard();
+      break;
     case "undo":
       undo();
       break;
     case "redo":
       redo();
+      break;
+    case "share":
+      shareDocument();
       break;
     case "toggle-theme":
       toggleTheme();
@@ -400,6 +623,21 @@ function handleAction(action) {
       break;
     case "preset-import":
       importPresets();
+      break;
+    case "search-next":
+      searchNavigate(1);
+      break;
+    case "search-prev":
+      searchNavigate(-1);
+      break;
+    case "search-close":
+      closeSearchBar();
+      break;
+    case "replace-one":
+      replaceOne();
+      break;
+    case "replace-all":
+      replaceAll();
       break;
     default:
       break;
@@ -528,6 +766,12 @@ function redo() {
 function bindSplitter() {
   if (!splitter) return;
   let isDragging = false;
+
+  const savedWidth = localStorage.getItem("splitterWidth");
+  if (savedWidth) {
+    document.querySelector(".workspace").style.setProperty("--editor-width", savedWidth);
+  }
+
   splitter.addEventListener("mousedown", (event) => {
     isDragging = true;
     document.body.style.cursor = "col-resize";
@@ -538,6 +782,10 @@ function bindSplitter() {
     if (!isDragging) return;
     isDragging = false;
     document.body.style.cursor = "";
+    const current = document.querySelector(".workspace").style.getPropertyValue("--editor-width");
+    if (current) {
+      localStorage.setItem("splitterWidth", current);
+    }
   });
 
   window.addEventListener("mousemove", (event) => {
@@ -573,6 +821,21 @@ function updateLineNumbers() {
 
 function syncLineScroll() {
   lineNumbers.scrollTop = editor.scrollTop;
+  syncPreviewScroll();
+}
+
+function syncPreviewScroll() {
+  try {
+    const doc = previewFrame.contentDocument;
+    if (!doc || !doc.documentElement) return;
+    const editorMax = editor.scrollHeight - editor.clientHeight;
+    if (editorMax <= 0) return;
+    const ratio = editor.scrollTop / editorMax;
+    const previewMax = doc.documentElement.scrollHeight - doc.documentElement.clientHeight;
+    doc.documentElement.scrollTop = ratio * previewMax;
+  } catch (error) {
+    /* 크로스오리진 접근 방지 */
+  }
 }
 
 function updateStatus() {
@@ -583,13 +846,39 @@ function updateStatus() {
   const before = text.slice(0, cursor);
   const row = before.split("\n").length;
   const col = before.length - before.lastIndexOf("\n");
-  statusbar.textContent = `줄 ${row}, 열 ${col} · ${lines}줄 · ${chars}자 · Markdown`;
+  const savedInfo = statusbar.dataset.saved || "";
+  statusbar.textContent = `줄 ${row}, 열 ${col} · ${lines}줄 · ${chars}자 · Markdown${savedInfo ? ` · ${savedInfo}` : ""}`;
+  syncHeadingDropdown();
+}
+
+function syncHeadingDropdown() {
+  const headingSelect = document.getElementById("headingLevel");
+  if (!headingSelect) return;
+  const text = editor.value;
+  const cursor = editor.selectionStart;
+  const lineStart = text.lastIndexOf("\n", cursor - 1) + 1;
+  const lineEnd = text.indexOf("\n", cursor);
+  const line = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
+  const match = line.match(/^(#{1,6})\s/);
+  headingSelect.value = match ? match[1].length : 0;
+}
+
+function debouncedPreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(updatePreview, 150);
 }
 
 function updatePreview() {
   md.set({ breaks: settings.convertBreaks });
   const html = buildPreviewHtml();
   previewFrame.srcdoc = html;
+  updateDocumentTitle();
+}
+
+function updateDocumentTitle() {
+  const { frontmatter } = parseFrontmatter(editor.value);
+  const title = frontmatter.title || "";
+  document.title = title ? `${title} - 마크다운ㅎ글` : "마크다운ㅎ글 - 마크다운을 아래한글 형식으로";
 }
 
 function buildPreviewHtml() {
@@ -612,13 +901,29 @@ function buildDocumentHtml({ forExport }) {
       ? "special-hide"
       : "";
   const headingClass = settings.headingStyle === "boxed" ? "boxed" : "basic";
+  const isDark = !forExport && document.body.dataset.theme === "dark";
+  const highlightTheme = isDark ? "tomorrow-night" : "tomorrow";
+  const highlightCss = settings.enableHighlight
+    ? `<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${highlightTheme}.min.css">`
+    : "";
+  const fontsCss = `<link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&family=Nanum+Myeongjo:wght@400;700;800&family=Nanum+Gothic+Coding:wght@400;700&family=Noto+Serif+KR:wght@400;700&family=Pretendard+Variable:wght@400;700&display=swap" rel="stylesheet">`;
+  const katexCss = `<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">`;
+  const hasMermaid = bodyHtml.includes('<div class="mermaid">');
+  const mermaidScript = hasMermaid
+    ? `<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.4.1/mermaid.min.js"><\/script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });<\/script>`
+    : "";
 
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <title>${escapeHtml(frontmatter.title || "문서")}</title>
-  ${settings.enableHighlight ? '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tomorrow.min.css">' : ""}
+  ${fontsCss}
+  ${highlightCss}
+  ${katexCss}
   <style>${buildBaseStyles({ forExport })}</style>
 </head>
 <body class="${hideHeaderFooterClass}">
@@ -628,6 +933,7 @@ function buildDocumentHtml({ forExport }) {
   ${divider}
   <main class="hwp-content ${headingClass}">${bodyHtml}</main>
   ${settings.footerEnabled ? footer : ""}
+  ${mermaidScript}
 </body>
 </html>`;
 }
@@ -638,7 +944,9 @@ function renderMarkdown(content) {
   const env = {};
   const tokens = md.parse(source, env);
   const headings = extractHeadings(tokens);
-  const html = md.renderer.render(tokens, md.options, env);
+  let html = md.renderer.render(tokens, md.options, env);
+  html = renderFootnotes(html);
+  html = renderKatex(html);
   const tocHtml = headings
     .map((h) => {
       const cls = `hwp-toc-level-${h.level}`;
@@ -730,14 +1038,56 @@ function buildBaseStyles({ forExport }) {
     settings.breakH3 ? "h3 { page-break-before: always; }" : "",
   ].join("\n");
 
+  const fontMap = {
+    NanumGothic: "'Nanum Gothic', sans-serif",
+    NanumMyeongjo: "'Nanum Myeongjo', serif",
+    NotoSerifKR: "'Noto Serif KR', serif",
+    Pretendard: "'Pretendard Variable', sans-serif",
+  };
+  const fontStack = fontMap[settings.fontFamily] || fontMap.NanumGothic;
+
   return `
+    /* ===== @page 인쇄 규칙 ===== */
+    @page {
+      size: A4;
+      margin: ${settings.marginTop} ${settings.marginRight} ${settings.marginBottom} ${settings.marginLeft};
+    }
+
+    @media print {
+      body { margin: 0; }
+      .hwp-header {
+        position: running(hwpHeader);
+      }
+      .hwp-footer {
+        position: running(hwpFooter);
+      }
+      .hwp-cover-page,
+      .hwp-toc-page,
+      .hwp-divider-page {
+        page-break-after: always;
+      }
+      table { page-break-inside: avoid; }
+      pre { page-break-inside: avoid; }
+      blockquote { page-break-inside: avoid; }
+      img { page-break-inside: avoid; }
+      h1, h2, h3, h4, h5, h6 {
+        page-break-after: avoid;
+        page-break-inside: avoid;
+      }
+      a { color: #000 !important; text-decoration: none !important; }
+      a[href]::after { content: none !important; }
+    }
+
+    /* ===== 기본 타이포그래피 ===== */
     :root {
-      --hwp-font-family: '${settings.fontFamily}', 'Nanum Gothic', sans-serif;
+      --hwp-font-family: ${fontStack};
       --hwp-font-size: ${settings.fontSize}pt;
       --hwp-line-height: ${settings.lineHeight};
       --hwp-word-break: ${settings.wordBreak};
       --hwp-indent: ${settings.indent}px;
     }
+
+    * { box-sizing: border-box; }
 
     body {
       font-family: var(--hwp-font-family);
@@ -748,17 +1098,23 @@ function buildBaseStyles({ forExport }) {
       color: #000;
       background: #fff;
       text-align: justify;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
 
     p {
-      margin: 0.5em 0;
+      margin: 0.4em 0;
       text-indent: var(--hwp-indent);
+      orphans: 2;
+      widows: 2;
     }
 
+    /* ===== 제목 ===== */
     h1, h2, h3, h4, h5, h6 {
       font-weight: bold;
-      margin: 1.2em 0 0.6em;
+      margin: 1.2em 0 0.5em;
       page-break-after: avoid;
+      text-indent: 0;
     }
 
     h1 {
@@ -775,84 +1131,161 @@ function buildBaseStyles({ forExport }) {
 
     h3 { font-size: 12pt; }
     h4 { font-size: 11pt; }
-    h5, h6 { font-size: 10pt; }
+    h5, h6 { font-size: 10pt; color: #333; }
 
+    /* ===== HWP 관공서 스타일 표 ===== */
     table {
       width: 100%;
       border-collapse: collapse;
       margin: 1em 0;
       font-size: 9pt;
-    }
-
-    table th, table td {
-      border: 1px solid #000;
-      padding: 6px 10px;
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+      page-break-inside: avoid;
     }
 
     table thead th {
-      background: #f0f0f0;
+      background: #e8e8e8;
+      border-top: 2px solid #000;
+      border-bottom: 2px solid #000;
+      border-left: 1px solid #999;
+      border-right: 1px solid #999;
+      padding: 8px 10px;
       text-align: center;
+      font-weight: bold;
+      font-size: 9pt;
     }
 
+    table thead th:first-child { border-left: none; }
+    table thead th:last-child { border-right: none; }
+
+    table tbody td {
+      border-bottom: 1px solid #ccc;
+      border-left: 1px solid #ddd;
+      border-right: 1px solid #ddd;
+      padding: 6px 10px;
+      vertical-align: top;
+    }
+
+    table tbody td:first-child { border-left: none; }
+    table tbody td:last-child { border-right: none; }
+
+    table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    table caption {
+      caption-side: top;
+      text-align: left;
+      font-size: 9pt;
+      font-weight: bold;
+      padding: 4px 0;
+      color: #333;
+    }
+
+    /* ===== 인용문 ===== */
     blockquote {
       border-left: 3px solid #333;
       background: #f9f9f9;
       padding: 0.5em 1em;
       margin: 1em 0;
+      color: #222;
+      page-break-inside: avoid;
     }
 
+    blockquote p { text-indent: 0; }
+
+    /* ===== 코드 블록 ===== */
     pre {
       background: #f5f5f5;
       border: 1px solid #ddd;
-      padding: 12px;
+      padding: 12px 16px;
       border-radius: 2px;
       overflow-x: auto;
       font-size: 9pt;
       white-space: pre-wrap;
+      word-wrap: break-word;
+      page-break-inside: avoid;
     }
 
     code {
-      font-family: 'Nanum Gothic Coding', 'D2Coding', monospace;
+      font-family: 'Nanum Gothic Coding', 'D2Coding', 'Consolas', monospace;
     }
 
+    p code, li code, td code {
+      background: #f0f0f0;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 0.9em;
+      border: 1px solid #e0e0e0;
+    }
+
+    /* ===== 구분선 ===== */
     hr {
       border: none;
       border-top: 1px solid #000;
       margin: 1.5em 0;
     }
 
+    /* ===== 링크 ===== */
     a {
       color: #0563c1;
       text-decoration: underline;
     }
 
+    /* ===== 이미지 ===== */
     img {
       max-width: 100%;
       height: auto;
+      page-break-inside: avoid;
     }
 
+    /* ===== 목록 ===== */
+    ul, ol {
+      margin: 0.5em 0;
+      padding-left: 2em;
+    }
+
+    li {
+      margin: 0.2em 0;
+    }
+
+    li p { text-indent: 0; margin: 0.2em 0; }
+
+    /* 체크리스트 */
+    li.task-list-item {
+      list-style: none;
+      margin-left: -1.5em;
+    }
+
+    li.task-list-item input[type="checkbox"] {
+      margin-right: 0.4em;
+    }
+
+    /* ===== 헤더/푸터 ===== */
     .hwp-header {
       font-size: ${settings.headerSize}px;
       display: flex;
       justify-content: space-between;
+      align-items: center;
       color: #888;
-      border-bottom: 1px solid #ddd;
-      padding: 0.5em 0;
+      border-bottom: 1px solid #ccc;
+      padding: 0.3em 0 0.5em;
+      margin-bottom: 1em;
     }
 
     .hwp-footer {
       font-size: ${settings.footerSize}px;
-      border-top: 1px solid #ddd;
-      border-bottom: none;
-      margin-top: 0.5em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #888;
+      border-top: 1px solid #ccc;
+      padding: 0.5em 0 0.3em;
+      margin-top: 1em;
     }
 
-    .hwp-cover-page,
-    .hwp-toc-page,
-    .hwp-divider-page {
-      page-break-after: always;
-    }
-
+    /* ===== 표지 ===== */
     .hwp-cover-page {
       display: flex;
       flex-direction: column;
@@ -860,15 +1293,47 @@ function buildBaseStyles({ forExport }) {
       align-items: center;
       min-height: 100vh;
       text-align: center;
+      page-break-after: always;
+      padding: 0 2em;
     }
 
-    .hwp-cover-org { font-size: 14pt; color: #333; margin-bottom: 3em; }
-    .hwp-cover-title { font-size: 28pt; font-weight: bold; margin-bottom: 0.5em; }
-    .hwp-cover-subtitle { font-size: 16pt; color: #555; margin-bottom: 3em; }
-    .hwp-cover-meta { margin-top: auto; padding-bottom: 3em; }
-    .hwp-cover-date, .hwp-cover-author { font-size: 12pt; }
+    .hwp-cover-org {
+      font-size: 14pt;
+      color: #333;
+      margin-bottom: 3em;
+      letter-spacing: 0.15em;
+    }
+    .hwp-cover-title {
+      font-size: 28pt;
+      font-weight: bold;
+      margin-bottom: 0.5em;
+      border-bottom: 3px double #000;
+      padding-bottom: 0.4em;
+    }
+    .hwp-cover-subtitle {
+      font-size: 16pt;
+      color: #555;
+      margin-bottom: 3em;
+    }
+    .hwp-cover-meta {
+      margin-top: auto;
+      padding-bottom: 3em;
+      text-align: center;
+    }
+    .hwp-cover-date {
+      font-size: 12pt;
+      margin-bottom: 0.5em;
+    }
+    .hwp-cover-author {
+      font-size: 12pt;
+      font-weight: bold;
+    }
 
-    .hwp-toc-page { padding-top: 2em; }
+    /* ===== 목차 ===== */
+    .hwp-toc-page {
+      padding-top: 2em;
+      page-break-after: always;
+    }
     .hwp-toc-heading {
       font-size: 20pt;
       font-weight: bold;
@@ -876,7 +1341,15 @@ function buildBaseStyles({ forExport }) {
       margin-bottom: 2em;
       letter-spacing: 0.3em;
     }
-    .hwp-toc-item { display: flex; align-items: baseline; }
+    .hwp-toc-item {
+      display: flex;
+      align-items: baseline;
+      padding: 0.25em 0;
+    }
+    .hwp-toc-item a {
+      color: #000;
+      text-decoration: none;
+    }
     .hwp-toc-item::after {
       content: "";
       flex: 1;
@@ -885,36 +1358,41 @@ function buildBaseStyles({ forExport }) {
       position: relative;
       bottom: 0.25em;
     }
-    .hwp-toc-level-1 { font-size: 11pt; }
-    .hwp-toc-level-2 { font-size: 10pt; }
-    .hwp-toc-level-3 { font-size: 9pt; color: #333; }
+    .hwp-toc-level-1 { font-size: 11pt; font-weight: bold; }
+    .hwp-toc-level-2 { font-size: 10pt; padding-left: 1.5em; }
+    .hwp-toc-level-3 { font-size: 9pt; padding-left: 3em; color: #333; }
 
+    /* ===== 간지 ===== */
     .hwp-divider-page {
       display: flex;
       justify-content: center;
       align-items: center;
       min-height: 100vh;
+      page-break-after: always;
     }
-    .hwp-divider-title { font-size: 24pt; font-weight: bold; }
+    .hwp-divider-title {
+      font-size: 24pt;
+      font-weight: bold;
+      border-bottom: 2px solid #000;
+      padding-bottom: 0.3em;
+    }
 
+    /* ===== 박스형 제목 스타일 ===== */
     .hwp-content.boxed h1,
     .hwp-content.boxed h2,
     .hwp-content.boxed h3 {
       border: none;
-      padding: 0;
+      padding: 8px 12px;
+      background: #f4f4f4;
+      border-left: 4px solid #333;
+      border-radius: 0;
     }
 
-    .hwp-content.boxed h1::before,
-    .hwp-content.boxed h2::before,
-    .hwp-content.boxed h3::before {
-      content: "";
-      display: inline-block;
-      width: 10px;
-      height: 10px;
-      background: #333;
-      margin-right: 8px;
-    }
+    .hwp-content.boxed h1 { border-left-width: 6px; border-left-color: #000; }
+    .hwp-content.boxed h2 { border-left-width: 4px; border-left-color: #333; }
+    .hwp-content.boxed h3 { border-left-width: 3px; border-left-color: #666; background: #f8f8f8; }
 
+    /* ===== 줌/스케일 ===== */
     .hwp-content {
       transform: scale(${scale});
       transform-origin: top left;
@@ -927,7 +1405,29 @@ function buildBaseStyles({ forExport }) {
       display: none;
     }
 
-    .hwp-content.${headingClass} {}
+    /* ===== 각주 ===== */
+    .footnote-ref a {
+      color: #0563c1;
+      text-decoration: none;
+      font-size: 0.8em;
+    }
+    .footnotes-sep {
+      margin-top: 2em;
+    }
+    .footnotes {
+      font-size: 9pt;
+      color: #555;
+    }
+    .footnotes ol {
+      padding-left: 1.5em;
+    }
+    .footnotes li {
+      margin: 0.3em 0;
+    }
+    .footnote-backref {
+      text-decoration: none;
+      color: #0563c1;
+    }
   `;
 }
 
@@ -957,16 +1457,139 @@ function slugify(text) {
   );
 }
 
+const EMOJI_MAP = {
+  smile: "😄", grin: "😁", laugh: "😆", joy: "😂", rofl: "🤣",
+  wink: "😉", blush: "😊", innocent: "😇", heart_eyes: "😍", kiss: "😘",
+  thinking: "🤔", shush: "🤫", zipper: "🤐", raised_eyebrow: "🤨",
+  neutral: "😐", expressionless: "😑", unamused: "😒", roll_eyes: "🙄",
+  grimace: "😬", lying: "🤥", relieved: "😌", sleepy: "😪", sleeping: "😴",
+  mask: "😷", nerd: "🤓", sunglasses: "😎", disguised: "🥸",
+  confused: "😕", worried: "😟", frown: "🙁", sad: "😢", cry: "😭",
+  angry: "😠", rage: "🤬", skull: "💀", poop: "💩",
+  clown: "🤡", ghost: "👻", alien: "👽", robot: "🤖",
+  heart: "❤️", orange_heart: "🧡", yellow_heart: "💛", green_heart: "💚",
+  blue_heart: "💙", purple_heart: "💜", black_heart: "🖤", white_heart: "🤍",
+  broken_heart: "💔", fire: "🔥", sparkles: "✨", star: "⭐", star2: "🌟",
+  zap: "⚡", boom: "💥", wave: "👋", ok_hand: "👌",
+  thumbsup: "👍", thumbsdown: "👎", fist: "✊", clap: "👏", pray: "🙏",
+  muscle: "💪", eyes: "👀", brain: "🧠", tongue: "👅",
+  check: "✅", x: "❌", warning: "⚠️", question: "❓", exclamation: "❗",
+  bulb: "💡", memo: "📝", pencil: "✏️", pin: "📌", clip: "📎",
+  book: "📖", folder: "📁", calendar: "📅", chart: "📊",
+  rocket: "🚀", airplane: "✈️", car: "🚗", bike: "🚲",
+  sun: "☀️", moon: "🌙", cloud: "☁️", rain: "🌧️", snow: "❄️", rainbow: "🌈",
+  dog: "🐕", cat: "🐈", bug: "🐛", butterfly: "🦋",
+  tree: "🌳", flower: "🌸", cherry_blossom: "🌸", rose: "🌹",
+  apple: "🍎", coffee: "☕", pizza: "🍕", cake: "🎂", beer: "🍺",
+  trophy: "🏆", medal: "🥇", crown: "👑", gem: "💎",
+  music: "🎵", bell: "🔔", megaphone: "📢", lock: "🔒", key: "🔑",
+  tada: "🎉", balloon: "🎈", gift: "🎁", party: "🥳",
+  hundred: "💯", plus: "➕", minus: "➖", point_right: "👉", point_left: "👈",
+  up: "⬆️", down: "⬇️", left: "⬅️", right: "➡️",
+  recycle: "♻️", globe: "🌍", peace: "☮️", yin_yang: "☯️",
+};
+
 function replaceEmojis(text) {
-  const map = {
-    ":smile:": "😄",
-    ":grin:": "😁",
-    ":heart:": "❤️",
-    ":thumbsup:": "👍",
-    ":fire:": "🔥",
-    ":sparkles:": "✨",
-  };
-  return Object.keys(map).reduce((acc, key) => acc.replaceAll(key, map[key]), text);
+  return text.replace(/:([a-z0-9_]+):/g, (match, name) => EMOJI_MAP[name] || match);
+}
+
+function initEmojiAutocomplete() {
+  let popup = null;
+  let emojiStartPos = -1;
+
+  editor.addEventListener("input", () => {
+    const cursor = editor.selectionStart;
+    const textBefore = editor.value.slice(0, cursor);
+    const colonMatch = textBefore.match(/:([a-z0-9_]{1,20})$/);
+    if (!colonMatch) {
+      removeEmojiPopup();
+      return;
+    }
+    const query = colonMatch[1];
+    emojiStartPos = cursor - query.length - 1;
+    const matches = Object.keys(EMOJI_MAP)
+      .filter((k) => k.startsWith(query))
+      .slice(0, 8);
+    if (!matches.length) {
+      removeEmojiPopup();
+      return;
+    }
+    showEmojiPopup(matches, query);
+  });
+
+  function showEmojiPopup(matches, query) {
+    removeEmojiPopup();
+    popup = document.createElement("div");
+    popup.className = "emoji-popup";
+    popup.innerHTML = matches
+      .map((name, i) =>
+        `<div class="emoji-item${i === 0 ? " active" : ""}" data-emoji="${name}">${EMOJI_MAP[name]} :${name}:</div>`
+      )
+      .join("");
+    const rect = editor.getBoundingClientRect();
+    const lineHeight = 22.4;
+    const textBefore = editor.value.slice(0, editor.selectionStart);
+    const lines = textBefore.split("\n");
+    const row = lines.length;
+    popup.style.position = "fixed";
+    popup.style.left = `${rect.left + 70}px`;
+    popup.style.top = `${rect.top + (row * lineHeight) - editor.scrollTop + 4}px`;
+    popup.style.zIndex = "200";
+    document.body.appendChild(popup);
+    popup.querySelectorAll(".emoji-item").forEach((item) => {
+      item.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        insertEmoji(item.dataset.emoji);
+      });
+    });
+  }
+
+  function removeEmojiPopup() {
+    if (popup && popup.parentNode) {
+      popup.parentNode.removeChild(popup);
+    }
+    popup = null;
+  }
+
+  function insertEmoji(name) {
+    const emoji = EMOJI_MAP[name];
+    if (!emoji) return;
+    const cursor = editor.selectionStart;
+    const before = editor.value.slice(0, emojiStartPos);
+    const after = editor.value.slice(cursor);
+    editor.value = `${before}${emoji}${after}`;
+    editor.selectionStart = emojiStartPos + emoji.length;
+    editor.selectionEnd = emojiStartPos + emoji.length;
+    editor.focus();
+    removeEmojiPopup();
+    saveMarkdown(editor.value);
+    updatePreview();
+  }
+
+  editor.addEventListener("keydown", (event) => {
+    if (!popup) return;
+    const items = popup.querySelectorAll(".emoji-item");
+    const activeIndex = [...items].findIndex((el) => el.classList.contains("active"));
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      items[activeIndex]?.classList.remove("active");
+      items[(activeIndex + 1) % items.length]?.classList.add("active");
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      items[activeIndex]?.classList.remove("active");
+      items[(activeIndex - 1 + items.length) % items.length]?.classList.add("active");
+    } else if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      const active = popup.querySelector(".emoji-item.active");
+      if (active) insertEmoji(active.dataset.emoji);
+    } else if (event.key === "Escape") {
+      removeEmojiPopup();
+    }
+  });
+
+  editor.addEventListener("blur", () => {
+    setTimeout(removeEmojiPopup, 150);
+  });
 }
 
 function formatDate(date) {
@@ -991,13 +1614,18 @@ function openModal(name) {
     info: infoModal,
     preset: presetModal,
     help: helpModal,
+    template: templateModal,
   };
+  if (!map[name]) return;
   map[name].hidden = false;
   if (name === "settings") {
     document.body.classList.add("settings-open");
   }
   if (name === "preset") {
     renderPresets();
+  }
+  if (name === "template") {
+    renderTemplates();
   }
 }
 
@@ -1007,11 +1635,271 @@ function closeModal(name) {
     info: infoModal,
     preset: presetModal,
     help: helpModal,
+    template: templateModal,
   };
+  if (!map[name]) return;
   map[name].hidden = true;
   if (name === "settings") {
     document.body.classList.remove("settings-open");
   }
+}
+
+function openSearchBar(showReplace) {
+  const bar = document.getElementById("searchBar");
+  const replaceRow = document.getElementById("replaceRow");
+  const input = document.getElementById("searchInput");
+  bar.hidden = false;
+  replaceRow.hidden = !showReplace;
+  input.focus();
+  input.select();
+  input.addEventListener("input", performSearch);
+}
+
+function closeSearchBar() {
+  const bar = document.getElementById("searchBar");
+  bar.hidden = true;
+  searchMatches = [];
+  searchIndex = -1;
+  document.getElementById("searchCount").textContent = "";
+  document.getElementById("searchInput").value = "";
+  document.getElementById("replaceInput").value = "";
+  editor.focus();
+}
+
+function performSearch() {
+  const query = document.getElementById("searchInput").value;
+  const countEl = document.getElementById("searchCount");
+  searchMatches = [];
+  searchIndex = -1;
+  if (!query) {
+    countEl.textContent = "";
+    return;
+  }
+  const text = editor.value;
+  let idx = text.indexOf(query);
+  while (idx !== -1) {
+    searchMatches.push(idx);
+    idx = text.indexOf(query, idx + 1);
+  }
+  if (searchMatches.length > 0) {
+    searchIndex = 0;
+    highlightSearchMatch(query);
+  }
+  countEl.textContent = searchMatches.length > 0
+    ? `${searchIndex + 1}/${searchMatches.length}`
+    : "0건";
+}
+
+function searchNavigate(direction) {
+  if (!searchMatches.length) return;
+  searchIndex = (searchIndex + direction + searchMatches.length) % searchMatches.length;
+  const query = document.getElementById("searchInput").value;
+  highlightSearchMatch(query);
+  document.getElementById("searchCount").textContent = `${searchIndex + 1}/${searchMatches.length}`;
+}
+
+function highlightSearchMatch(query) {
+  const pos = searchMatches[searchIndex];
+  if (pos === undefined) return;
+  editor.focus();
+  editor.selectionStart = pos;
+  editor.selectionEnd = pos + query.length;
+  const linesBefore = editor.value.slice(0, pos).split("\n").length;
+  const lineHeight = editor.scrollHeight / (editor.value.split("\n").length || 1);
+  editor.scrollTop = Math.max(0, (linesBefore - 5) * lineHeight);
+}
+
+function replaceOne() {
+  const query = document.getElementById("searchInput").value;
+  const replacement = document.getElementById("replaceInput").value;
+  if (!query || searchMatches.length === 0) return;
+  pushHistorySnapshot();
+  const pos = searchMatches[searchIndex];
+  editor.value = editor.value.slice(0, pos) + replacement + editor.value.slice(pos + query.length);
+  saveMarkdown(editor.value);
+  updateLineNumbers();
+  updateStatus();
+  updatePreview();
+  historySnapshot = createSnapshot();
+  redoStack.length = 0;
+  performSearch();
+}
+
+function replaceAll() {
+  const query = document.getElementById("searchInput").value;
+  const replacement = document.getElementById("replaceInput").value;
+  if (!query) return;
+  pushHistorySnapshot();
+  editor.value = editor.value.split(query).join(replacement);
+  saveMarkdown(editor.value);
+  updateLineNumbers();
+  updateStatus();
+  updatePreview();
+  historySnapshot = createSnapshot();
+  redoStack.length = 0;
+  performSearch();
+}
+
+const TEMPLATES = [
+  {
+    name: "빈 문서",
+    icon: "📄",
+    content: "",
+  },
+  {
+    name: "기본 문서",
+    icon: "📝",
+    content: DEFAULT_MARKDOWN,
+  },
+  {
+    name: "관공서 보고서",
+    icon: "🏛️",
+    content: `---
+title: 업무 보고서
+subtitle: 2026년 상반기 업무 추진 현황
+author: 홍길동
+date: ${formatDate(new Date())}
+organization: OO부 OO과
+---
+
+# 1. 개요
+
+## 1.1 목적
+본 보고서는 2026년 상반기 업무 추진 현황을 보고하기 위해 작성되었습니다.
+
+## 1.2 범위
+- 기간: 2026.01 ~ 2026.06
+- 대상: OO부 전체
+
+# 2. 추진 현황
+
+| 구분 | 계획 | 실적 | 달성률 |
+|------|------|------|--------|
+| 과제 A | 100 | 95 | 95% |
+| 과제 B | 50 | 52 | 104% |
+| 과제 C | 30 | 28 | 93% |
+
+# 3. 향후 계획
+
+1. 미달성 과제 보완 조치
+2. 하반기 신규 과제 발굴
+3. 협업 체계 강화
+
+# 4. 건의 사항
+
+> 원활한 업무 추진을 위해 인력 보강이 필요합니다.
+`,
+  },
+  {
+    name: "회의록",
+    icon: "🗓️",
+    content: `---
+title: 회의록
+date: ${formatDate(new Date())}
+author: 작성자
+organization: OO팀
+---
+
+# 회의록
+
+## 회의 개요
+- **일시**: ${formatDate(new Date())} 00:00
+- **장소**: 회의실
+- **참석자**: 홍길동, 김철수, 이영희
+- **안건**: 프로젝트 진행 현황 점검
+
+## 논의 내용
+
+### 1. 전차 회의 결과 확인
+- [ ] 과제 A 완료 여부 확인
+- [x] 과제 B 진행 중
+
+### 2. 금차 논의 사항
+1. 일정 조정 필요
+2. 예산 재검토
+
+### 3. 의결 사항
+| 번호 | 안건 | 결과 |
+|------|------|------|
+| 1 | 일정 연장 | 승인 |
+| 2 | 예산 추가 | 보류 |
+
+## 향후 일정
+- 다음 회의: YYYY.MM.DD
+- 담당자별 조치사항 완료 기한: YYYY.MM.DD
+`,
+  },
+  {
+    name: "제안서",
+    icon: "💡",
+    content: `---
+title: 프로젝트 제안서
+subtitle: OO 시스템 구축 제안
+author: 제안사
+date: ${formatDate(new Date())}
+organization: OO 주식회사
+---
+
+# 1. 제안 배경
+
+현재 OO 업무의 비효율성을 개선하기 위해 시스템 구축을 제안합니다.
+
+## 1.1 현황 분석
+- 수작업 처리로 인한 오류 발생
+- 데이터 통합 관리 부재
+
+# 2. 제안 내용
+
+## 2.1 시스템 구성
+\`\`\`mermaid
+graph TD
+  A[사용자] --> B[웹 인터페이스]
+  B --> C[API 서버]
+  C --> D[데이터베이스]
+\`\`\`
+
+## 2.2 주요 기능
+1. **데이터 통합 관리**: 모든 데이터를 중앙에서 관리
+2. **자동화 처리**: 반복 업무 자동화
+3. **대시보드**: 실시간 현황 모니터링
+
+# 3. 기대 효과
+
+| 구분 | 현재 | 개선 후 | 효과 |
+|------|------|---------|------|
+| 처리 시간 | 2시간 | 10분 | 92% 단축 |
+| 오류율 | 5% | 0.1% | 98% 감소 |
+
+# 4. 추진 일정
+
+- **1단계** (1~2개월): 요구사항 분석 및 설계
+- **2단계** (3~4개월): 개발 및 테스트
+- **3단계** (5개월): 시범 운영 및 안정화
+`,
+  },
+];
+
+function renderTemplates() {
+  const container = document.getElementById("templateList");
+  container.innerHTML = TEMPLATES
+    .map((t, i) =>
+      `<div class="template-item" data-template="${i}">
+        <span class="template-icon">${t.icon}</span>
+        <span class="template-name">${t.name}</span>
+      </div>`
+    )
+    .join("");
+  container.querySelectorAll(".template-item").forEach((item) => {
+    item.addEventListener("click", () => {
+      const tmpl = TEMPLATES[Number(item.dataset.template)];
+      editor.value = tmpl.content;
+      saveMarkdown(editor.value);
+      updateLineNumbers();
+      updateStatus();
+      updatePreview();
+      closeModal("template");
+    });
+  });
 }
 
 function openHelp(index) {
@@ -1028,6 +1916,40 @@ function openHelp(index) {
   } else {
     nextBtn.textContent = "다음";
     nextBtn.dataset.action = "help-next";
+  }
+}
+
+function shareDocument() {
+  try {
+    const encoded = btoa(unescape(encodeURIComponent(editor.value)));
+    const url = `${location.origin}${location.pathname}?doc=${encoded}`;
+    if (url.length > 32000) {
+      alert("문서가 너무 커서 URL로 공유할 수 없습니다. (최대 약 24KB)");
+      return;
+    }
+    navigator.clipboard.writeText(url).then(() => {
+      const btn = document.querySelector('[data-action="share"]');
+      const original = btn.textContent;
+      btn.textContent = "복사됨!";
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    });
+  } catch (error) {
+    alert("공유 URL을 생성할 수 없습니다.");
+  }
+}
+
+function loadFromUrlParam() {
+  const params = new URLSearchParams(location.search);
+  const doc = params.get("doc");
+  if (!doc) return false;
+  try {
+    const decoded = decodeURIComponent(escape(atob(doc)));
+    editor.value = decoded;
+    saveMarkdown(editor.value);
+    history.replaceState(null, "", location.pathname);
+    return true;
+  } catch (error) {
+    return false;
   }
 }
 
@@ -1061,6 +1983,33 @@ function openPrintWindow() {
   printWindow.print();
 }
 
+async function copyHtmlToClipboard() {
+  try {
+    const html = buildExportHtml();
+    const blob = new Blob([html], { type: "text/html" });
+    const plainBlob = new Blob([editor.value], { type: "text/plain" });
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "text/html": blob,
+        "text/plain": plainBlob,
+      }),
+    ]);
+    const btn = document.querySelector('[data-action="copy-html"]');
+    const original = btn.textContent;
+    btn.textContent = "복사됨!";
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  } catch (error) {
+    const fallback = buildExportHtml();
+    const textarea = document.createElement("textarea");
+    textarea.value = fallback;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+    alert("HTML이 클립보드에 복사되었습니다. (텍스트 형식)");
+  }
+}
+
 function downloadFile(filename, content) {
   const type = filename.endsWith(".html") ? "text/html" : "text/plain";
   const blob = new Blob([content], { type: `${type};charset=utf-8` });
@@ -1074,6 +2023,19 @@ function downloadFile(filename, content) {
 
 function saveMarkdown(value) {
   localStorage.setItem("markdown", value);
+  showSaveIndicator();
+}
+
+function showSaveIndicator() {
+  clearTimeout(saveIndicatorTimer);
+  const now = new Date();
+  const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+  statusbar.dataset.saved = `저장됨 ${timeStr}`;
+  updateStatus();
+  saveIndicatorTimer = setTimeout(() => {
+    statusbar.dataset.saved = "";
+    updateStatus();
+  }, 3000);
 }
 
 function loadMarkdown() {
