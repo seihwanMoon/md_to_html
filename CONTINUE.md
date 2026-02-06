@@ -19,6 +19,8 @@
 | **Phase 1** | 키보드 단축키, 동기 스크롤, 헤딩 동기화, Splitter 저장, 단일 아코디언, 자동저장 표시, 디바운스, 탭 제목 | ✅ 완료 |
 | **Phase 2** | HTML/PDF 템플릿 고도화, @media print, 코드 블록 테마, HTML 클립보드 복사 | ✅ 완료 |
 | **Phase 3** | KaTeX, Mermaid, 이미지 붙여넣기/드래그앤드롭, 검색/치환, 이모지 자동완성, 각주, 템플릿, 공유 URL | ✅ 완료 |
+| **설정 호환** | 원본(md.takjakim.kr) JSON과 설정 키/구조 통일, 프리셋 가져오기 호환 | ✅ 완료 |
+| **Phase 3.1** | 표 스타일(thead #f0f0f0, tbody 짝수 행 #fafafa), orphans/widows 3, 코드 폰트(D2Coding), 인라인 code 스타일, 링크 색 | ✅ 완료 |
 
 상세 내역은 **`dev.md`** 의 "개선 로드맵" 및 "완료된 기능" 섹션 참고.
 
@@ -26,7 +28,11 @@
 
 ## 다음에 할 일 (Phase 4)
 
-**Phase 4 — 코드 아키텍처 개선** (난이도 ★★★)
+### Phase 3.1 — 완료
+
+- 3.1-1~3.1-4 구현 완료. (3.1-5 프리셋 확장은 선택 사항, 이후 Phase에서 반영 가능)
+
+### Phase 4 — 코드 아키텍처 개선 (다음 진행)
 
 1. **4-1. Vite + ES Modules 전환**
    - `app.js` → `editor.js`, `preview.js`, `settings.js`, `export.js`, `presets.js`, `utils.js` 등으로 분리
@@ -42,7 +48,7 @@
 4. **4-4. File System Access API**
    - 폴더 연결 기능 (Chrome/Edge)
 
-로드맵 전체는 **`dev.md`** 의 Phase 4, Phase 5 블록 참고.
+로드맵 전체는 **`dev.md`** 의 Phase 3.1, Phase 4, Phase 5 블록 참고.
 
 ---
 
@@ -50,19 +56,22 @@
 
 | 파일 | 용도 |
 |------|------|
-| `dev.md` | 개발 기록, 완료 기능 목록, **전체 로드맵(Phase 1~5)** |
-| `app.js` | 모든 로직 (초기화, 툴바, 에디터, 미리보기, 설정, 프리셋, 내보내기, 검색, 이모지, 템플릿, 공유 등) |
+| `dev.md` | 개발 기록, 완료 기능 목록, **전체 로드맵(Phase 1~5, Phase 3.1)** |
+| `CONTINUE.md` | **이어하기 가이드** — 다음에 할 일(Phase 3.1 → 4), 파일 위치 |
+| `app.js` | 모든 로직. **Phase 3.1** 시 `buildBaseStyles()` 내 표/본문/코드/링크 CSS 수정 |
 | `index.html` | 레이아웃, 모달(정보/프리셋/도움말/설정/템플릿), 검색 바, 스크립트/CDN 로드 |
 | `styles.css` | 레이아웃, 테마, 모달, 검색 바, 이모지 팝업, 템플릿 리스트 |
+| `docs/preset-improvement-ideas.md` | 원본 프리셋 JSON 비교·개선 아이디어 (Phase 3.1-5 참고) |
 
 ---
 
 ## 새 세션에서 시작할 때
 
-1. **`dev.md`** 를 열어 "개선 로드맵" → Phase 4 항목 확인.
-2. Phase 4부터 진행할 경우: Vite 프로젝트 생성 후 기존 `app.js`를 모듈별로 분리하는 작업부터 진행하면 됨.
-3. 구현이 끝나면 **`dev.md`** 의 해당 Phase를 `[x]`로 체크하고 "완료된 기능" 섹션에 한 줄씩 추가하는 규칙 유지.
+1. **`CONTINUE.md`** (이 파일)에서 "다음에 할 일" 확인 → **Phase 4** (코드 아키텍처 개선).
+2. **`dev.md`** 에서 "개선 로드맵" → Phase 4 항목(4-1 ~ 4-4) 확인.
+3. Phase 4 진행: Vite 프로젝트 생성, `app.js` 모듈 분리(editor, preview, settings, export, presets, utils), npm 전환, HMR 등.
+4. 구현이 끝나면 **`dev.md`** 의 해당 Phase를 `[x]`로 체크하고 "완료된 기능" 섹션에 한 줄씩 추가하는 규칙 유지.
 
 ---
 
-*마지막 업데이트: 2026-02-06 (Phase 3 완료 기준)*
+*마지막 업데이트: 2026-02-06 (Phase 3.1 구현 완료, 다음: Phase 4)*

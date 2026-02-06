@@ -33,27 +33,27 @@
         </div>
         <div class="topbar-actions">
           <div class="group">
-            <button class="btn" data-action="new">새 문서</button>
-            <button class="btn" data-action="folder">폴더 연결</button>
-            <button class="btn" data-action="load">불러오기</button>
-            <button class="btn" data-action="save">저장하기</button>
+            <button type="button" class="btn" data-action="new">새 문서</button>
+            <button type="button" class="btn" data-action="folder">폴더 연결</button>
+            <button type="button" class="btn" data-action="load">불러오기</button>
+            <button type="button" class="btn" data-action="save">저장하기</button>
           </div>
           <div class="group">
-            <button class="btn" data-action="export-html">HTML</button>
-            <button class="btn" data-action="export-pdf">PDF</button>
-            <button class="btn" data-action="copy-html">복사</button>
+            <button type="button" class="btn" data-action="export-html">HTML</button>
+            <button type="button" class="btn" data-action="export-pdf">PDF</button>
+            <button type="button" class="btn" data-action="copy-html">복사</button>
           </div>
           <div class="group">
-            <button class="btn" data-view="edit">편집</button>
-            <button class="btn active" data-view="split">분할</button>
-            <button class="btn" data-view="preview">미리보기</button>
+            <button type="button" class="btn" data-view="edit">편집</button>
+            <button type="button" class="btn active" data-view="split">분할</button>
+            <button type="button" class="btn" data-view="preview">미리보기</button>
           </div>
-          <button class="btn" data-action="share">공유</button>
-          <button class="btn" data-action="toggle-theme">라이트</button>
-          <button class="btn" data-action="help">도움말</button>
-          <button class="btn" data-action="preset">프리셋</button>
-          <button class="btn" data-action="settings">설정</button>
-          <button class="btn" data-action="info">정보</button>
+          <button type="button" class="btn" data-action="share">공유</button>
+          <button type="button" class="btn" data-action="toggle-theme">라이트</button>
+          <button type="button" class="btn" data-action="help">도움말</button>
+          <button type="button" class="btn" data-action="preset">프리셋</button>
+          <button type="button" class="btn" data-action="settings">설정</button>
+          <button type="button" class="btn" data-action="info">정보</button>
         </div>
       </header>
       <div class="formatbar">
@@ -207,10 +207,10 @@
             <div class="field">
               <label>폰트</label>
               <select id="fontFamily">
-                <option value="NanumGothic">나눔고딕</option>
-                <option value="NanumMyeongjo">나눔명조</option>
-                <option value="NotoSerifKR">Noto Serif KR</option>
-                <option value="Pretendard">Pretendard</option>
+                <option value="nanum-gothic">나눔고딕</option>
+                <option value="nanum-myeongjo">나눔명조</option>
+                <option value="noto-serif-kr">Noto Serif KR</option>
+                <option value="pretendard">Pretendard</option>
               </select>
             </div>
             <div class="field">
@@ -230,11 +230,11 @@
             </div>
             <div class="field">
               <label>들여쓰기</label>
-              <input type="number" id="indent" min="0" max="20" step="1" /> px
+              <input type="number" id="textIndent" min="0" max="20" step="1" /> px
             </div>
             <div class="field">
               <label>PDF 출력 스케일</label>
-              <input type="number" id="pdfScale" min="0.5" max="2" step="0.1" />
+              <input type="number" id="scale" min="0.5" max="2" step="0.1" />
             </div>
           </details>
 
@@ -267,7 +267,7 @@
             <div class="field">
               <label>스타일</label>
               <select id="headingStyle">
-                <option value="basic">기본</option>
+                <option value="default">기본</option>
                 <option value="boxed">박스</option>
               </select>
             </div>
@@ -276,13 +276,13 @@
           <details class="settings-accordion">
             <summary>페이지 나누기</summary>
             <label class="checkbox">
-              <input type="checkbox" id="breakH1" /> H1 앞에서 나누기
+              <input type="checkbox" id="pageBreakBeforeH1" /> H1 앞에서 나누기
             </label>
             <label class="checkbox">
-              <input type="checkbox" id="breakH2" /> H2 앞에서 나누기
+              <input type="checkbox" id="pageBreakBeforeH2" /> H2 앞에서 나누기
             </label>
             <label class="checkbox">
-              <input type="checkbox" id="breakH3" /> H3 앞에서 나누기
+              <input type="checkbox" id="pageBreakBeforeH3" /> H3 앞에서 나누기
             </label>
           </details>
 
@@ -306,7 +306,7 @@
             </label>
             <div class="field">
               <label>글꼴 크기</label>
-              <input type="number" id="headerSize" min="8" max="14" step="1" /> px
+              <input type="number" id="headerFontSize" min="8" max="14" step="1" /> px
             </div>
             <div class="field">
               <label>왼쪽</label>
@@ -338,7 +338,7 @@
             </label>
             <div class="field">
               <label>글꼴 크기</label>
-              <input type="number" id="footerSize" min="8" max="14" step="1" /> px
+              <input type="number" id="footerFontSize" min="8" max="14" step="1" /> px
             </div>
             <div class="field">
               <label>왼쪽</label>
@@ -350,7 +350,7 @@
             <div class="field">
               <label>가운데</label>
               <select id="footerCenter">
-                <option value="page">페이지 번호</option>
+                <option value="pageNumber">페이지 번호</option>
                 <option value="none">없음</option>
               </select>
             </div>
@@ -366,19 +366,19 @@
           <details class="settings-accordion">
             <summary>기타</summary>
             <label class="checkbox">
-              <input type="checkbox" id="convertBreaks" /> 줄바꿈 변환
+              <input type="checkbox" id="breaks" /> 줄바꿈 변환
             </label>
             <label class="checkbox">
-              <input type="checkbox" id="enableEmoji" /> 이모지
+              <input type="checkbox" id="emoji" /> 이모지
             </label>
             <label class="checkbox">
-              <input type="checkbox" id="enableHighlight" /> 구문 강조
+              <input type="checkbox" id="highlight" /> 구문 강조
             </label>
             <label class="checkbox">
               <input type="checkbox" id="printBackground" /> 배경 인쇄
             </label>
             <label class="checkbox">
-              <input type="checkbox" id="hideOnSpecial" /> 특수페이지 헤더/푸터 숨기기
+              <input type="checkbox" id="hideHeaderFooterOnSpecialPages" /> 특수페이지 헤더/푸터 숨기기
             </label>
           </details>
         </div>

@@ -30,41 +30,95 @@ function hello() {
   - 하위 항목
 `;
 
+/** 원본(md.takjakim.kr)과 동일한 키/구조로 호환 */
 const DEFAULT_SETTINGS = {
-  fontFamily: "NanumGothic",
+  breaks: true,
+  emoji: true,
+  highlight: true,
+  fontFamily: "nanum-gothic",
   fontSize: 10,
   lineHeight: 1.6,
   wordBreak: "keep-all",
-  indent: 0,
-  pdfScale: 1,
-  marginTop: "15mm",
-  marginBottom: "15mm",
-  marginLeft: "20mm",
-  marginRight: "20mm",
+  textIndent: "0",
+  scale: 1,
+  margin: { top: "15mm", right: "20mm", bottom: "15mm", left: "20mm" },
   tableStyle: "hwp",
-  headingStyle: "basic",
-  breakH1: false,
-  breakH2: false,
-  breakH3: false,
+  headingStyle: "default",
+  pageBreakBeforeH1: false,
+  pageBreakBeforeH2: false,
+  pageBreakBeforeH3: false,
   coverPage: false,
   tocPage: false,
   dividerPage: false,
   headerEnabled: true,
-  headerSize: 9,
+  headerFontSize: 9,
   headerLeft: "title",
   headerCenter: "none",
   headerRight: "date",
   footerEnabled: true,
-  footerSize: 9,
+  footerFontSize: 9,
   footerLeft: "none",
-  footerCenter: "page",
+  footerCenter: "pageNumber",
   footerRight: "none",
-  convertBreaks: true,
-  enableEmoji: true,
-  enableHighlight: true,
   printBackground: true,
-  hideOnSpecial: true,
+  hideHeaderFooterOnSpecialPages: true,
 };
+
+/** margin 값 읽기: 설정이 객체면 그대로, 예전 개별 키면 객체로 반환 */
+function getMargin(s) {
+  if (s.margin && typeof s.margin === "object") return s.margin;
+  return {
+    top: s.marginTop || "15mm",
+    right: s.marginRight || "20mm",
+    bottom: s.marginBottom || "15mm",
+    left: s.marginLeft || "20mm",
+  };
+}
+
+/** 숫자 들여쓰기 (textIndent 문자열 허용) */
+function getTextIndent(s) {
+  const v = s.textIndent;
+  if (typeof v === "number") return v;
+  return Number(v) || 0;
+}
+
+/**
+ * 가져온 프리셋 설정을 원본 형식으로 정규화.
+ * 예전 우리 형식(convertBreaks, marginTop 등) → 원본 형식(breaks, margin) 마이그레이션.
+ */
+function normalizeImportedPresetSettings(imported) {
+  if (!imported || typeof imported !== "object") return { ...DEFAULT_SETTINGS };
+  const m = getMargin(imported);
+  const out = {
+    ...DEFAULT_SETTINGS,
+    breaks: imported.breaks ?? imported.convertBreaks ?? DEFAULT_SETTINGS.breaks,
+    emoji: imported.emoji ?? imported.enableEmoji ?? DEFAULT_SETTINGS.emoji,
+    highlight: imported.highlight ?? imported.enableHighlight ?? DEFAULT_SETTINGS.highlight,
+    scale: Number(imported.scale ?? imported.pdfScale ?? DEFAULT_SETTINGS.scale) || 1,
+    textIndent: imported.textIndent !== undefined ? String(imported.textIndent) : (imported.indent !== undefined ? String(imported.indent) : DEFAULT_SETTINGS.textIndent),
+    margin: m,
+    headerFontSize: Number(imported.headerFontSize ?? imported.headerSize ?? DEFAULT_SETTINGS.headerFontSize) || 9,
+    footerFontSize: Number(imported.footerFontSize ?? imported.footerSize ?? DEFAULT_SETTINGS.footerFontSize) || 9,
+    footerCenter: imported.footerCenter === "page" ? "pageNumber" : (imported.footerCenter ?? DEFAULT_SETTINGS.footerCenter),
+    headingStyle: imported.headingStyle === "basic" ? "default" : (imported.headingStyle ?? DEFAULT_SETTINGS.headingStyle),
+    pageBreakBeforeH1: imported.pageBreakBeforeH1 ?? imported.breakH1 ?? DEFAULT_SETTINGS.pageBreakBeforeH1,
+    pageBreakBeforeH2: imported.pageBreakBeforeH2 ?? imported.breakH2 ?? DEFAULT_SETTINGS.pageBreakBeforeH2,
+    pageBreakBeforeH3: imported.pageBreakBeforeH3 ?? imported.breakH3 ?? DEFAULT_SETTINGS.pageBreakBeforeH3,
+    hideHeaderFooterOnSpecialPages: imported.hideHeaderFooterOnSpecialPages ?? imported.hideOnSpecial ?? DEFAULT_SETTINGS.hideHeaderFooterOnSpecialPages,
+  };
+  ["fontFamily", "fontSize", "lineHeight", "wordBreak", "tableStyle", "headingStyle",
+    "coverPage", "tocPage", "dividerPage", "headerEnabled", "footerEnabled",
+    "headerLeft", "headerCenter", "headerRight", "footerLeft", "footerRight",
+    "printBackground"].forEach((k) => {
+    if (imported[k] !== undefined) out[k] = imported[k];
+  });
+  const font = imported.fontFamily;
+  if (font) {
+    const v = String(font).toLowerCase().replace(/\s+/g, "-");
+    out.fontFamily = ["nanum-gothic", "nanum-myeongjo", "noto-serif-kr", "pretendard"].includes(v) ? v : font;
+  }
+  return out;
+}
 
 const HELP_STEPS = [
   {
@@ -153,12 +207,12 @@ const md = window.markdownit({
   html: true,
   linkify: true,
   typographer: true,
-  breaks: settings.convertBreaks,
+  breaks: settings.breaks,
   highlight(code, lang) {
     if (lang === "mermaid") {
       return `<div class="mermaid">${escapeHtml(code)}</div>`;
     }
-    if (!settings.enableHighlight) {
+    if (!settings.highlight) {
       return "";
     }
     if (lang && hljs.getLanguage(lang)) {
@@ -275,7 +329,11 @@ function bindToolbar() {
   });
 
   document.querySelectorAll("[data-action]").forEach((button) => {
-    button.addEventListener("click", () => handleAction(button.dataset.action));
+    button.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handleAction(button.dataset.action);
+    });
   });
 
   const headingSelect = document.getElementById("headingLevel");
@@ -442,69 +500,100 @@ function handleEditorKeydown(event) {
 }
 
 function bindSettings() {
+  const marginIds = ["marginTop", "marginBottom", "marginLeft", "marginRight"];
+  const marginKeys = ["top", "bottom", "left", "right"];
   const bindings = {
     fontFamily: "fontFamily",
     fontSize: "fontSize",
     lineHeight: "lineHeight",
     wordBreak: "wordBreak",
-    indent: "indent",
-    pdfScale: "pdfScale",
-    marginTop: "marginTop",
-    marginBottom: "marginBottom",
-    marginLeft: "marginLeft",
-    marginRight: "marginRight",
+    textIndent: "textIndent",
+    scale: "scale",
     tableStyle: "tableStyle",
     headingStyle: "headingStyle",
-    breakH1: "breakH1",
-    breakH2: "breakH2",
-    breakH3: "breakH3",
+    pageBreakBeforeH1: "pageBreakBeforeH1",
+    pageBreakBeforeH2: "pageBreakBeforeH2",
+    pageBreakBeforeH3: "pageBreakBeforeH3",
     coverPage: "coverPage",
     tocPage: "tocPage",
     dividerPage: "dividerPage",
     headerEnabled: "headerEnabled",
-    headerSize: "headerSize",
+    headerFontSize: "headerFontSize",
     headerLeft: "headerLeft",
     headerCenter: "headerCenter",
     headerRight: "headerRight",
     footerEnabled: "footerEnabled",
-    footerSize: "footerSize",
+    footerFontSize: "footerFontSize",
     footerLeft: "footerLeft",
     footerCenter: "footerCenter",
     footerRight: "footerRight",
-    convertBreaks: "convertBreaks",
-    enableEmoji: "enableEmoji",
-    enableHighlight: "enableHighlight",
+    breaks: "breaks",
+    emoji: "emoji",
+    highlight: "highlight",
     printBackground: "printBackground",
-    hideOnSpecial: "hideOnSpecial",
+    hideHeaderFooterOnSpecialPages: "hideHeaderFooterOnSpecialPages",
   };
+
+  function syncSettingsToForm() {
+    const m = getMargin(settings);
+    marginIds.forEach((id, i) => {
+      const el = document.getElementById(id);
+      if (el) el.value = m[marginKeys[i]];
+    });
+    Object.keys(bindings).forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const key = bindings[id];
+      if (el.type === "checkbox") el.checked = settings[key];
+      else el.value = key === "scale" ? Number(settings[key]) : settings[key];
+    });
+  }
+  window.refreshSettingsForm = syncSettingsToForm;
+
+  marginIds.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const m = getMargin(settings);
+    el.value = m[marginKeys[i]];
+    if (!el.dataset.bound) {
+      el.addEventListener("change", () => {
+        if (!settings.margin) settings.margin = { ...DEFAULT_SETTINGS.margin };
+        settings.margin[marginKeys[i]] = el.value;
+        handleSettingsChange();
+      });
+      el.dataset.bound = "true";
+    }
+  });
 
   Object.keys(bindings).forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
+    const key = bindings[id];
     if (el.type === "checkbox") {
-      el.checked = settings[bindings[id]];
+      el.checked = settings[key];
       if (!el.dataset.bound) {
         el.addEventListener("change", () => {
-          settings[bindings[id]] = el.checked;
+          settings[key] = el.checked;
           handleSettingsChange();
         });
         el.dataset.bound = "true";
       }
       return;
     }
-    el.value = settings[bindings[id]];
+    el.value = key === "scale" ? Number(settings[key]) : settings[key];
     if (!el.dataset.bound) {
       el.addEventListener("change", () => {
         if (el.type === "number") {
-          settings[bindings[id]] = Number(el.value);
+          settings[key] = Number(el.value);
         } else {
-          settings[bindings[id]] = el.value;
+          settings[key] = el.value;
         }
         handleSettingsChange();
       });
       el.dataset.bound = "true";
     }
   });
+  syncSettingsToForm();
 }
 
 function bindPreset() {
@@ -766,11 +855,33 @@ function redo() {
 function bindSplitter() {
   if (!splitter) return;
   let isDragging = false;
+  const workspace = splitter.closest(".workspace");
+  if (!workspace) return;
+  const minW = 260;
 
   const savedWidth = localStorage.getItem("splitterWidth");
-  if (savedWidth) {
-    document.querySelector(".workspace").style.setProperty("--editor-width", savedWidth);
-  }
+  const applySavedWidth = () => {
+    const total = workspace.getBoundingClientRect().width;
+    if (!savedWidth || total < minW * 2) {
+      workspace.style.removeProperty("--editor-width");
+      return;
+    }
+    const parsed = parseInt(savedWidth, 10);
+    if (Number.isNaN(parsed)) {
+      workspace.style.removeProperty("--editor-width");
+      return;
+    }
+    const maxW = total - minW - 6;
+    if (parsed > maxW || parsed < minW) {
+      const clamped = `${Math.min(maxW, Math.max(minW, parsed))}px`;
+      workspace.style.setProperty("--editor-width", clamped);
+    } else {
+      workspace.style.setProperty("--editor-width", `${parsed}px`);
+    }
+  };
+  applySavedWidth();
+  requestAnimationFrame(applySavedWidth);
+  setTimeout(applySavedWidth, 100);
 
   splitter.addEventListener("mousedown", (event) => {
     isDragging = true;
@@ -869,7 +980,7 @@ function debouncedPreview() {
 }
 
 function updatePreview() {
-  md.set({ breaks: settings.convertBreaks });
+  md.set({ breaks: settings.breaks });
   const html = buildPreviewHtml();
   previewFrame.srcdoc = html;
   updateDocumentTitle();
@@ -897,13 +1008,14 @@ function buildDocumentHtml({ forExport }) {
   const toc = settings.tocPage ? buildToc(tocHtml) : "";
   const divider = settings.dividerPage ? buildDivider(headings) : "";
   const hideHeaderFooterClass =
-    settings.hideOnSpecial && (settings.coverPage || settings.tocPage || settings.dividerPage)
+    settings.hideHeaderFooterOnSpecialPages && (settings.coverPage || settings.tocPage || settings.dividerPage)
       ? "special-hide"
       : "";
   const headingClass = settings.headingStyle === "boxed" ? "boxed" : "basic";
+  const margin = getMargin(settings);
   const isDark = !forExport && document.body.dataset.theme === "dark";
   const highlightTheme = isDark ? "tomorrow-night" : "tomorrow";
-  const highlightCss = settings.enableHighlight
+  const highlightCss = settings.highlight
     ? `<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${highlightTheme}.min.css">`
     : "";
   const fontsCss = `<link rel="preconnect" href="https://fonts.googleapis.com">
@@ -940,7 +1052,7 @@ function buildDocumentHtml({ forExport }) {
 
 function renderMarkdown(content) {
   const { frontmatter, body } = parseFrontmatter(content);
-  const source = settings.enableEmoji ? replaceEmojis(body) : body;
+  const source = settings.emoji ? replaceEmojis(body) : body;
   const env = {};
   const tokens = md.parse(source, env);
   const headings = extractHeadings(tokens);
@@ -998,7 +1110,7 @@ function resolveHeaderFooterValue(type, frontmatter) {
   if (type === "none") return "";
   if (type === "title") return escapeHtml(frontmatter.title || "");
   if (type === "date") return escapeHtml(frontmatter.date || formatDate(new Date()));
-  if (type === "page") return "1 / 1";
+  if (type === "page" || type === "pageNumber") return "1 / 1";
   return "";
 }
 
@@ -1030,27 +1142,28 @@ function buildDivider(headings) {
 }
 
 function buildBaseStyles({ forExport }) {
+  const margin = getMargin(settings);
   const headingClass = settings.headingStyle === "boxed" ? "boxed" : "basic";
-  const scale = forExport ? settings.pdfScale : zoom;
+  const scale = forExport ? settings.scale : zoom;
   const breakStyles = [
-    settings.breakH1 ? "h1 { page-break-before: always; }" : "",
-    settings.breakH2 ? "h2 { page-break-before: always; }" : "",
-    settings.breakH3 ? "h3 { page-break-before: always; }" : "",
+    settings.pageBreakBeforeH1 ? "h1 { page-break-before: always; }" : "",
+    settings.pageBreakBeforeH2 ? "h2 { page-break-before: always; }" : "",
+    settings.pageBreakBeforeH3 ? "h3 { page-break-before: always; }" : "",
   ].join("\n");
 
   const fontMap = {
-    NanumGothic: "'Nanum Gothic', sans-serif",
-    NanumMyeongjo: "'Nanum Myeongjo', serif",
-    NotoSerifKR: "'Noto Serif KR', serif",
-    Pretendard: "'Pretendard Variable', sans-serif",
+    "nanum-gothic": "'Nanum Gothic', sans-serif",
+    "nanum-myeongjo": "'Nanum Myeongjo', serif",
+    "noto-serif-kr": "'Noto Serif KR', serif",
+    pretendard: "'Pretendard Variable', sans-serif",
   };
-  const fontStack = fontMap[settings.fontFamily] || fontMap.NanumGothic;
+  const fontStack = fontMap[settings.fontFamily] || fontMap["nanum-gothic"];
 
   return `
     /* ===== @page 인쇄 규칙 ===== */
     @page {
       size: A4;
-      margin: ${settings.marginTop} ${settings.marginRight} ${settings.marginBottom} ${settings.marginLeft};
+      margin: ${margin.top} ${margin.right} ${margin.bottom} ${margin.left};
     }
 
     @media print {
@@ -1084,7 +1197,7 @@ function buildBaseStyles({ forExport }) {
       --hwp-font-size: ${settings.fontSize}pt;
       --hwp-line-height: ${settings.lineHeight};
       --hwp-word-break: ${settings.wordBreak};
-      --hwp-indent: ${settings.indent}px;
+      --hwp-indent: ${getTextIndent(settings)}px;
     }
 
     * { box-sizing: border-box; }
@@ -1094,7 +1207,7 @@ function buildBaseStyles({ forExport }) {
       font-size: var(--hwp-font-size);
       line-height: var(--hwp-line-height);
       word-break: var(--hwp-word-break);
-      margin: ${settings.marginTop} ${settings.marginRight} ${settings.marginBottom} ${settings.marginLeft};
+      margin: ${margin.top} ${margin.right} ${margin.bottom} ${margin.left};
       color: #000;
       background: #fff;
       text-align: justify;
@@ -1105,8 +1218,8 @@ function buildBaseStyles({ forExport }) {
     p {
       margin: 0.4em 0;
       text-indent: var(--hwp-indent);
-      orphans: 2;
-      widows: 2;
+      orphans: 3;
+      widows: 3;
     }
 
     /* ===== 제목 ===== */
@@ -1145,7 +1258,7 @@ function buildBaseStyles({ forExport }) {
     }
 
     table thead th {
-      background: #e8e8e8;
+      background: #f0f0f0;
       border-top: 2px solid #000;
       border-bottom: 2px solid #000;
       border-left: 1px solid #999;
@@ -1169,6 +1282,10 @@ function buildBaseStyles({ forExport }) {
 
     table tbody td:first-child { border-left: none; }
     table tbody td:last-child { border-right: none; }
+
+    table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
 
     table tbody tr:last-child td {
       border-bottom: none;
@@ -1209,13 +1326,13 @@ function buildBaseStyles({ forExport }) {
     }
 
     code {
-      font-family: 'Nanum Gothic Coding', 'D2Coding', 'Consolas', monospace;
+      font-family: 'D2Coding', 'Nanum Gothic Coding', 'Consolas', 'Courier New', monospace;
     }
 
-    p code, li code, td code {
+    :not(pre):not(.hljs) > code {
       background: #f0f0f0;
-      padding: 1px 4px;
-      border-radius: 3px;
+      padding: 0.15em 0.3em;
+      border-radius: 2px;
       font-size: 0.9em;
       border: 1px solid #e0e0e0;
     }
@@ -1264,7 +1381,7 @@ function buildBaseStyles({ forExport }) {
 
     /* ===== 헤더/푸터 ===== */
     .hwp-header {
-      font-size: ${settings.headerSize}px;
+      font-size: ${settings.headerFontSize}px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -1275,7 +1392,7 @@ function buildBaseStyles({ forExport }) {
     }
 
     .hwp-footer {
-      font-size: ${settings.footerSize}px;
+      font-size: ${settings.footerFontSize}px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -1620,6 +1737,7 @@ function openModal(name) {
   map[name].hidden = false;
   if (name === "settings") {
     document.body.classList.add("settings-open");
+    if (typeof window.refreshSettingsForm === "function") window.refreshSettingsForm();
   }
   if (name === "preset") {
     renderPresets();
@@ -1971,16 +2089,30 @@ function handleSettingsChange() {
 
 function openPrintWindow() {
   const html = buildExportHtml();
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) {
-    alert("팝업이 차단되어 PDF 내보내기를 열 수 없습니다.");
-    return;
-  }
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
+  const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("title", "PDF 인쇄");
+  iframe.style.cssText =
+    "position:fixed;left:-9999px;top:0;width:210mm;height:297mm;border:0;visibility:hidden;";
+  document.body.appendChild(iframe);
+
+  iframe.onload = function () {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (err) {
+      console.warn("PDF 인쇄:", err);
+      alert("인쇄 대화상자를 열 수 없습니다: " + (err.message || err));
+    }
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    }, 2000);
+  };
+
+  iframe.src = url;
 }
 
 async function copyHtmlToClipboard() {
@@ -2050,7 +2182,30 @@ function loadSettings() {
   const raw = localStorage.getItem("settings");
   if (!raw) return { ...DEFAULT_SETTINGS };
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    const out = { ...DEFAULT_SETTINGS, ...parsed };
+    if (!out.margin || typeof out.margin !== "object") {
+      out.margin = {
+        top: parsed.marginTop ?? out.marginTop ?? "15mm",
+        right: parsed.marginRight ?? out.marginRight ?? "20mm",
+        bottom: parsed.marginBottom ?? out.marginBottom ?? "15mm",
+        left: parsed.marginLeft ?? out.marginLeft ?? "20mm",
+      };
+    }
+    if (parsed.convertBreaks !== undefined) out.breaks = parsed.convertBreaks;
+    if (parsed.enableEmoji !== undefined) out.emoji = parsed.enableEmoji;
+    if (parsed.enableHighlight !== undefined) out.highlight = parsed.enableHighlight;
+    if (parsed.pdfScale !== undefined) out.scale = parsed.pdfScale;
+    if (parsed.indent !== undefined) out.textIndent = String(parsed.indent);
+    if (parsed.headerSize !== undefined) out.headerFontSize = parsed.headerSize;
+    if (parsed.footerSize !== undefined) out.footerFontSize = parsed.footerSize;
+    if (parsed.breakH1 !== undefined) out.pageBreakBeforeH1 = parsed.breakH1;
+    if (parsed.breakH2 !== undefined) out.pageBreakBeforeH2 = parsed.breakH2;
+    if (parsed.breakH3 !== undefined) out.pageBreakBeforeH3 = parsed.breakH3;
+    if (parsed.hideOnSpecial !== undefined) out.hideHeaderFooterOnSpecialPages = parsed.hideOnSpecial;
+    if (parsed.footerCenter === "page") out.footerCenter = "pageNumber";
+    if (parsed.headingStyle === "basic") out.headingStyle = "default";
+    return out;
   } catch (error) {
     return { ...DEFAULT_SETTINGS };
   }
@@ -2097,8 +2252,10 @@ function applyPreset(index) {
   const list = loadPresets();
   const preset = list[index];
   if (!preset) return;
-  settings = { ...settings, ...preset.settings };
+  const normalized = normalizeImportedPresetSettings(preset.settings);
+  settings = { ...settings, ...normalized };
   saveSettings(settings);
+  if (typeof window.refreshSettingsForm === "function") window.refreshSettingsForm();
   bindSettings();
   updatePreview();
 }
@@ -2124,13 +2281,22 @@ function importPresets() {
     if (!file) return;
     const text = await file.text();
     try {
-      const list = JSON.parse(text);
-      if (Array.isArray(list)) {
-        localStorage.setItem("presets", JSON.stringify(list));
-        renderPresets();
+      const data = JSON.parse(text);
+      const rawList = Array.isArray(data) ? data : [data];
+      const list = rawList.map((item) => {
+        const name = item && item.name != null ? String(item.name) : "가져온 프리셋";
+        const settings = normalizeImportedPresetSettings(item && item.settings);
+        return { name, settings };
+      });
+      if (list.length === 0) {
+        alert("유효한 프리셋이 없습니다.");
+        return;
       }
+      localStorage.setItem("presets", JSON.stringify(list));
+      renderPresets();
+      alert(`${list.length}개 프리셋을 가져왔습니다.`);
     } catch (error) {
-      alert("프리셋 파일을 읽을 수 없습니다.");
+      alert("프리셋 파일을 읽을 수 없습니다.\n" + (error.message || ""));
     }
   });
   input.click();
