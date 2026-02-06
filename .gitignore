@@ -1,16 +1,34 @@
-.vscode/
-.idea/
+﻿# Dependencies
+node_modules/
+
+# Vite build output
+dist/
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
 .DS_Store
 Thumbs.db
-*.log
-*.tmp
-*.bak
-*.swp
-*.swo
-node_modules/
-dist/
-build/
-.env
-.env.*
-.playwright-mcp/
-*.code-workspace
+Desktop.ini
+
+# IDE / Editor (필요 시 주석 해제)
+# .idea/
+# .vscode/
+# *.swp
+# *.swo
+*~
+
+# Optional: test / coverage (나중에 테스트 추가 시 사용)
+# coverage/
+# .nyc_output/
+"@ | Set-Content -Path .gitignore -Encoding utf8

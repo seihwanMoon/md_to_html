@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>HWP MD PDF 웹 서비스</title>
+  <meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&family=Nanum+Myeongjo:wght@400;700;800&family=Nanum+Gothic+Coding:wght@400;700&family=Noto+Serif+KR:wght@400;700&family=Pretendard+Variable:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+  
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+html,footer,header{
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* ==highlight== support */
+mark {
+  background-color: #fff3b0;
+  padding: 0.1em 0.2em;
+  border-radius: 2px;
+}
+
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * HWP (한글) Government Document Style
+ * 대한민국 관공서 문서 스타일
+ */
+
+/* CSS Custom Properties for dynamic font/settings injection */
+:root {
+  --hwp-font-family: 'NanumGothic', 'Nanum Gothic', sans-serif;
+  --hwp-font-size: 10pt;
+  --hwp-line-height: 1.6;
+  --hwp-word-break: keep-all;
+}
+
+/* Font face declarations for web fonts */
+/* These will be overridden by Google Fonts link in template */
+
+html, body {
+  font-family: var(--hwp-font-family);
+  font-size: var(--hwp-font-size);
+  line-height: var(--hwp-line-height);
+  word-break: var(--hwp-word-break);
+  overflow-wrap: break-word;
+  color: #000000;
+  background: #ffffff;
+}
+
+html, footer, header {
+  font-family: var(--hwp-font-family);
+  font-size: var(--hwp-font-size);
+}
+
+body {
+  padding: 0;
+  margin: 0;
+  text-align: justify;
+  text-justify: inter-word;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Headings - HWP style: bold, slightly larger, no decorative borders */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--hwp-font-family);
+  font-weight: bold;
+  color: #000000;
+  margin-top: 1.2em;
+  margin-bottom: 0.6em;
+  page-break-after: avoid;
+}
+
+h1 {
+  font-size: 16pt;
+  border-bottom: 2px solid #000000;
+  padding-bottom: 0.3em;
+}
+
+h2 {
+  font-size: 14pt;
+  border-bottom: 1px solid #333333;
+  padding-bottom: 0.2em;
+}
+
+h3 {
+  font-size: 12pt;
+}
+
+h4 {
+  font-size: 11pt;
+}
+
+h5, h6 {
+  font-size: 10pt;
+}
+
+/* Paragraphs */
+p {
+  margin: 0.5em 0;
+  text-indent: 0;
+  orphans: 3;
+  widows: 3;
+}
+
+/* Tables - HWP government style: clean borders */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 9pt;
+  page-break-inside: avoid;
+}
+
+table > thead > tr > th {
+  background-color: #f0f0f0;
+  font-weight: bold;
+  text-align: center;
+  border: 1px solid #000000;
+  padding: 6px 10px;
+}
+
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+  border: 1px solid #000000;
+  padding: 5px 10px;
+}
+
+table > tbody > tr:nth-child(even) {
+  background-color: #fafafa;
+}
+
+/* Lists */
+ul, ol {
+  padding-left: 2em;
+  margin: 0.5em 0;
+}
+
+li {
+  margin: 0.2em 0;
+}
+
+/* Blockquote - subtle left border style */
+blockquote {
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid #333333;
+  background: #f9f9f9;
+  color: #333333;
+}
+
+/* Code blocks */
+pre {
+  background-color: #f5f5f5;
+  border: 1px solid #dddddd;
+  border-radius: 2px;
+  padding: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  font-size: 9pt;
+  line-height: 1.4;
+}
+
+pre:not(.hljs) {
+  padding: 16px;
+}
+
+code {
+  font-family: 'D2Coding', 'Nanum Gothic Coding', 'Consolas', 'Courier New', monospace;
+  font-size: 9pt;
+}
+
+:not(pre):not(.hljs) > code {
+  background-color: #f0f0f0;
+  padding: 0.15em 0.3em;
+  border-radius: 2px;
+  font-size: inherit;
+}
+
+/* Horizontal rule */
+hr {
+  border: none;
+  border-top: 1px solid #000000;
+  margin: 1.5em 0;
+}
+
+/* Links */
+a {
+  color: #0563C1;
+  text-decoration: underline;
+}
+
+/* Images */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Page break */
+.page {
+  page-break-after: always;
+}
+
+/* Emoji */
+.emoji {
+  height: 1.4em;
+}
+
+/* Print optimizations */
+@media print {
+  body {
+    color: #000000;
+    background: #ffffff;
+  }
+
+  a {
+    color: #000000;
+    text-decoration: underline;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+  }
+
+  table, figure, pre {
+    page-break-inside: avoid;
+  }
+}
+
+</style>
+
+<style>
+:root {
+  --hwp-font-family: 'NanumGothic', 'Nanum Gothic', sans-serif;
+  --hwp-font-size: 10pt;
+  --hwp-line-height: 1.6;
+  --hwp-word-break: keep-all;
+}
+</style>
+
+<style>
+.hwp-cover-page { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; text-align: center; page-break-after: always; }
+.hwp-cover-org { font-size: 14pt; color: #333; margin-bottom: 3em; }
+.hwp-cover-title { font-size: 28pt; font-weight: bold; margin-bottom: 0.5em; }
+.hwp-cover-subtitle { font-size: 16pt; color: #555; margin-bottom: 3em; }
+.hwp-cover-meta { margin-top: auto; padding-bottom: 3em; }
+.hwp-cover-date { font-size: 12pt; margin-bottom: 0.5em; }
+.hwp-cover-author { font-size: 12pt; }
+.hwp-toc-page { page-break-after: always; padding-top: 2em; }
+.hwp-toc-heading { font-size: 20pt; font-weight: bold; text-align: center; margin-bottom: 2em; letter-spacing: 0.3em; }
+.hwp-toc-list { line-height: 2.2; }
+.hwp-toc-item { display: flex; align-items: baseline; }
+.hwp-toc-item a { color: #000; text-decoration: none; flex-shrink: 0; }
+.hwp-toc-item a:hover { text-decoration: underline; }
+.hwp-toc-item::after { content: ""; flex: 1; border-bottom: 1px dotted #999; margin: 0 0.4em; min-width: 2em; position: relative; bottom: 0.25em; }
+.hwp-toc-page-num { flex-shrink: 0; font-variant-numeric: tabular-nums; order: 1; }
+.hwp-toc-item a { order: 0; }
+.hwp-toc-item::after { order: 0; }
+.hwp-toc-level-1 { font-size: 11pt; }
+.hwp-toc-level-2 { font-size: 10pt; }
+.hwp-toc-level-3 { font-size: 9pt; color: #333; }
+.hwp-divider-page { display: flex; justify-content: center; align-items: center; min-height: 100vh; page-break-after: always; page-break-before: always; }
+.hwp-divider-title { font-size: 24pt; font-weight: bold; text-align: center; }
+.hwp-heading-box { display: flex; align-items: stretch; margin: 1.2em 0 0.6em 0; line-height: 1.4; page-break-after: avoid; }
+.hwp-heading-num { display: flex; align-items: center; justify-content: center; font-weight: bold; color: #fff; flex-shrink: 0; }
+.hwp-heading-text { display: flex; align-items: center; padding: 0.3em 0.7em; border: 1px solid #ccc; border-left: none; flex: 1; font-weight: bold; background: #fff; }
+.hwp-heading-box-1 { font-size: 16pt; }
+.hwp-heading-num-1 { background: #1a1a1a; padding: 0.3em 0.8em; min-width: 2.2em; font-size: 16pt; }
+.hwp-heading-box-1 .hwp-heading-text { border-color: #1a1a1a; }
+.hwp-heading-box-2 { font-size: 14pt; }
+.hwp-heading-num-2 { background: #404040; padding: 0.3em 0.7em; min-width: 2.8em; font-size: 14pt; }
+.hwp-heading-box-2 .hwp-heading-text { border-color: #404040; }
+.hwp-heading-box-3 { font-size: 12pt; }
+.hwp-heading-num-3 { background: #666; padding: 0.25em 0.6em; min-width: 3.4em; font-size: 12pt; }
+.hwp-heading-box-3 .hwp-heading-text { border-color: #666; }
+.hwp-heading-box-4, .hwp-heading-box-5, .hwp-heading-box-6 { font-size: 10pt; }
+.hwp-heading-num-4, .hwp-heading-num-5, .hwp-heading-num-6 { background: #888; padding: 0.2em 0.5em; min-width: 3.8em; font-size: 10pt; }
+.hwp-heading-box-4 .hwp-heading-text, .hwp-heading-box-5 .hwp-heading-text, .hwp-heading-box-6 .hwp-heading-text { border-color: #888; }
+</style>
+
+</head>
+<body style="margin:15mm 20mm 15mm 20mm;">
+  <div class="hwp-preview-header" style="font-size:9px;display:flex;justify-content:space-between;padding:0.5em 0;margin-bottom:0.5em;border-bottom:1px solid #ddd;color:#888;"><span>HWP MD PDF 웹 서비스</span><span></span><span>2026. 2. 5.</span></div>
+  <h1 id="%EC%A0%9C%EB%AA%A9-1">제목 1</h1>
+<p>본문 내용입니다. <strong>굵은 글씨</strong>와 <em>이탤릭</em>을 지원합니다.</p>
+<h2 id="%EC%A0%9C%EB%AA%A9-2">제목 2</h2>
+<h3 id="%EC%A0%9C%EB%AA%A9-3">제목 3</h3>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A</td>
+<td>첫 번째</td>
+</tr>
+<tr>
+<td>B</td>
+<td>두 번째</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>인용문 블록입니다.</p>
+</blockquote>
+<pre class="hljs"><code><div><span class="hljs-keyword">function</span> <span class="hljs-title function_">hello</span>(<span class="hljs-params"></span>) {
+  <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">log</span>(<span class="hljs-string">&quot;Hello, HWP MD PDF!&quot;</span>);
+}
+</div></code></pre>
+<ul>
+<li>목록 항목 1</li>
+<li>목록 항목 2
+<ul>
+<li>하위 항목</li>
+</ul>
+</li>
+</ul>
+
+  <div class="hwp-preview-footer" style="font-size:9px;display:flex;justify-content:space-between;padding:0.5em 0;margin-top:0.5em;border-top:1px solid #ddd;color:#888;"><span></span><span>1 / 1</span><span></span></div>
+</body>
+</html>
