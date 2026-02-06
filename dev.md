@@ -121,6 +121,29 @@
 - **페이지 나눔 시 푸터 PDF 반영** *(2026-02-06)* — `@media print`에서 `.segment-page` 내 헤더/푸터는 `position: static` 유지(브라우저 `position: running()` 미지원으로 푸터가 빠지던 문제 해결). `.segment-page` 높이를 인쇄용 콘텐츠 영역 `calc(297mm - margin.top - margin.bottom)`에 맞춰 푸터가 페이지 하단에 고정. 미리보기 `.preview-page`도 flex + `.preview-page-body`로 푸터 하단 고정.
 - **페이지 번호 사용자 설정** *(2026-02-06)* — 페이지 나눔(`\newpage` 등) 사용 시 세그먼트별로 실제 번호를 HTML에 주입(1/5, 2/5 …). 설정 푸터: **페이지 번호 시작**(첫 페이지 번호), **페이지 번호 형식**(현재/총, 현재만, 맞춤), **맞춤 형식**(`{{page}}`, `{{total}}` 플레이스홀더). 페이지 나눔 없을 때는 빈 span + CSS `counter` 유지(`.hwp-page-number:empty::after`).
 
+## 한글(아래한글) HTML 호환 개선 (트랙 C, 2026-02-06 추가)
+- Phase C-1 *(기본 호환)*:
+  - 내보내기 HTML에 한글 호환 메타 태그/클래스 추가: `Generator=Hwp 2022`, `Content-Type`, `HWP*` 클래스
+  - 표 태그에 HTML4 속성 보강: `border/cellspacing/cellpadding`
+  - 폰트 맵에 한글 기본 폰트 키(`바탕/돋움/굴림`) 매핑 추가
+- Phase C-2 *(스타일 강화)*:
+  - 문단/헤딩에 인라인 스타일 주입(줄간격 %, 들여쓰기 px, 헤딩 폰트 pt 등)
+  - 단순 color span → `<font color>` 변환으로 색상 보존률 개선
+- Phase C-3 *(한글 전용 복사 기능)*:
+  - 툴바에 **"한글 HTML 복사"** 버튼 추가
+  - `src/export-hwp-html.js`에서 한글 붙여넣기 최적 HTML 생성 및 클립보드 복사(`text/html` + `text/plain`)
+  - 한글 붙여넣기 안정화 후처리:
+    - 외부 리소스 제거: `<link>`, `<script>`
+    - KaTeX는 `[수식] TeX...` 텍스트로 폴백(마크업 노출 방지)
+    - 각주는 링크/앵커 제거 후 `[n]` + 목록 형태로 단순화
+    - 표 색상 유지: thead/줄무늬를 `bgcolor` 중심으로 주입(환경별 tr 무시 대비 td까지 보강)
+    - 코드 블록: `<pre>`를 table 기반 코드 박스로 변환(배경/여백/고정폭 폰트 보존률↑)
+- 테스트 문서:
+  - `docs/hwp-paste-test.md` 추가 (표 병합/색상/배경/코드/수식/각주 등)
+
+## 기타 수정
+- HTML 다운로드(`downloadFile`) 시 `.html`에 UTF-8 BOM을 붙여 한글에서 문자코드 경고를 줄임 (`src/utils.js`)
+
 ## 해결된 이슈
 - 문서설정 팝업이 X 클릭으로 닫히지 않던 문제
   - 원인: `.modal-overlay`가 `display:flex`로 고정되어 `hidden`이 무시됨

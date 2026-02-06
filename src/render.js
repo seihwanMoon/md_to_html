@@ -38,7 +38,51 @@ md.renderer.rules.heading_open = function (tokens, idx, options, env, self) {
   const next = tokens[idx + 1];
   const text = next && next.content ? next.content : "";
   if (text) token.attrSet("id", slugify(text));
+  // 인라인 스타일(한글 붙여넣기 호환)도 함께 적용
+  const level = Number(token.tag.replace("h", ""));
+  const sizePtByLevel = { 1: 18, 2: 16, 3: 14, 4: 12, 5: 11, 6: 10 };
+  const sizePt = sizePtByLevel[level] || 12;
+  mergeInlineStyle(token, `font-size:${sizePt}pt; font-weight:bold; margin:0; text-indent:0;`);
   return originalHeadingOpen(tokens, idx, options, env, self);
+};
+
+function mergeInlineStyle(token, nextStyle) {
+  if (!nextStyle) return;
+  const prev = token.attrGet("style");
+  const merged = prev ? `${prev}; ${nextStyle}` : nextStyle;
+  token.attrSet("style", merged);
+}
+
+// 한글 호환: 문단/헤딩에 인라인 스타일 추가 (붙여넣기 품질 개선)
+const originalParagraphOpen =
+  md.renderer.rules.paragraph_open ||
+  function (tokens, idx, options, env, self) {
+    return self.renderToken(tokens, idx, options);
+  };
+
+md.renderer.rules.paragraph_open = function (tokens, idx, options, env, self) {
+  const token = tokens[idx];
+  const s = state.settings;
+  const lineHeightPct = Math.round((Number(s.lineHeight) || 1.6) * 100);
+  const indentPx = Math.max(0, Number(getTextIndent(s)) || 0);
+  // 한글은 px 인라인 스타일을 비교적 잘 흡수함 (mm는 브라우저/붙여넣기 경로에 따라 흔들림)
+  mergeInlineStyle(token, `line-height:${lineHeightPct}%; text-indent:${indentPx}px; margin:0;`);
+  return originalParagraphOpen(tokens, idx, options, env, self);
+};
+
+// 한글 호환: 표에 HTML4 속성 추가
+const originalTableOpen =
+  md.renderer.rules.table_open ||
+  function (tokens, idx, options, env, self) {
+    return self.renderToken(tokens, idx, options);
+  };
+
+md.renderer.rules.table_open = function (tokens, idx, options, env, self) {
+  const token = tokens[idx];
+  token.attrSet("border", "1");
+  token.attrSet("cellspacing", "0");
+  token.attrSet("cellpadding", "0");
+  return originalTableOpen(tokens, idx, options, env, self);
 };
 
 function renderFootnotes(html) {
@@ -77,6 +121,27 @@ function renderKatex(html) {
     }
   });
   return html;
+}
+
+// 한글 호환: 색상 span 일부를 <font color>로 변환 (붙여넣기 시 색상 보존률 ↑)
+// - 스타일이 color만 있는 단순 span만 변환 (복잡한 style은 유지)
+function legacyColorize(html) {
+  return html.replace(
+    /<span\s+style="[^"]*?\bcolor\s*:\s*([^;"']+)\s*;?[^"]*?"\s*>([\s\S]*?)<\/span>/gi,
+    (m, color, inner) => {
+      // style에 color 외 다른 속성이 있으면 변환하지 않음(보수적으로)
+      const styleMatch = m.match(/style="([^"]+)"/i);
+      const style = styleMatch ? styleMatch[1] : "";
+      const cleaned = style
+        .replace(/\s+/g, "")
+        .replace(/;+/g, ";")
+        .replace(/;$/g, "");
+      // 허용: color:xxx 만
+      const onlyColor = /^color:[^;]+$/.test(cleaned.toLowerCase());
+      if (!onlyColor) return m;
+      return `<font color="${escapeHtml(color.trim())}">${inner}</font>`;
+    }
+  );
 }
 
 export function parseFrontmatter(text) {
@@ -205,6 +270,10 @@ function buildBaseStyles({ forExport }) {
     "nanum-myeongjo": "'Nanum Myeongjo', serif",
     "noto-serif-kr": "'Noto Serif KR', serif",
     pretendard: "'Pretendard Variable', sans-serif",
+    // 한글 기본 폰트 매핑 (한글 편집기 호환)
+    "바탕": "'Nanum Myeongjo', 'Batang', serif",
+    "돋움": "'Nanum Gothic', 'Dotum', sans-serif",
+    "굴림": "'Nanum Gothic', 'Gulim', sans-serif",
   };
   const fontStack = fontMap[s.fontFamily] || fontMap["nanum-gothic"];
 
@@ -340,6 +409,7 @@ export function renderMarkdown(content) {
   html = html.replace(/<!--\s*pagebreak\s*-->/gi, '<div class="page-break"></div>').replace(/<!--\s*newpage\s*-->/gi, '<div class="page-break"></div>');
   html = renderFootnotes(html);
   html = renderKatex(html);
+  html = legacyColorize(html);
   const tocHtml = headings
     .map((h) => {
       const cls = `hwp-toc-level-${h.level}`;
@@ -416,9 +486,11 @@ export function buildDocumentHtml(content, { forExport }) {
   const showGlobalHeaderFooter = !hasPageBreaks;
 
   return `<!DOCTYPE html>
-<html>
+<html class="HWP">
 <head>
   <meta charset="UTF-8">
+  <meta name="Generator" content="Hwp 2022">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
   <title>${escapeHtml(frontmatter.title || "문서")}</title>
   ${fontsCss}
   ${highlightCss}
@@ -426,12 +498,12 @@ export function buildDocumentHtml(content, { forExport }) {
   <style>${buildBaseStyles({ forExport })}</style>
   ${(state.settings.customCss || "").trim() ? `<style>/* 커스텀 CSS */\n${state.settings.customCss.trim()}</style>` : ""}
 </head>
-<body class="${hideHeaderFooterClass}">
+<body class="HWP-DOCUMENT HWP-BODY ${hideHeaderFooterClass}">
   ${showGlobalHeaderFooter && state.settings.headerEnabled ? header : ""}
   ${cover}
   ${toc}
   ${divider}
-  <main class="hwp-content ${headingClass}">${mainContent}</main>
+  <main class="HWP-PARAGRAPH hwp-content ${headingClass}">${mainContent}</main>
   ${showGlobalHeaderFooter && state.settings.footerEnabled ? footer : ""}
   ${mermaidScript}
 </body>

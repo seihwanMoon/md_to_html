@@ -10,6 +10,7 @@ import * as presets from "./presets.js";
 import { downloadFile, openPrintWindow, copyHtmlToClipboard, buildExportHtml } from "./export.js";
 import { exportDocx } from "./export-docx.js";
 import * as presentation from "./presentation.js";
+import { copyHwpHtmlToClipboard } from "./export-hwp-html.js";
 
 const settingsModal = document.getElementById("settingsModal");
 const infoModal = document.getElementById("infoModal");
@@ -164,6 +165,7 @@ function handleAction(action) {
     case "export-pdf": openPrintWindow(); break;
     case "export-docx": exportDocx(); break;
     case "copy-html": copyHtmlToClipboard(); break;
+    case "copy-hwp-html": copyHwpHtmlToClipboard(); break;
     case "undo": editor.undo(); break;
     case "redo": editor.redo(); break;
     case "share": shareDocument(); break;

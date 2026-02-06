@@ -46,7 +46,11 @@ export function slugify(text) {
 
 export function downloadFile(filename, content) {
   const type = filename.endsWith(".html") ? "text/html" : "text/plain";
-  const blob = new Blob([content], { type: `${type};charset=utf-8` });
+  // 한글(HWP)에서 HTML 파일을 직접 열 때 UTF-8을 안정적으로 인식시키기 위해
+  // HTML 다운로드에는 UTF-8 BOM을 붙인다. (클립보드 복사에는 BOM을 넣지 않음)
+  const bom = "\uFEFF";
+  const body = filename.endsWith(".html") ? `${bom}${content}` : content;
+  const blob = new Blob([body], { type: `${type};charset=utf-8` });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
