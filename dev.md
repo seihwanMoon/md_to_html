@@ -1,10 +1,11 @@
-# 개발 진행 기록 (2026-02-05)
+# 개발 진행 기록 (2026-02-06)
 
 > **다음 세션에서 이어서 구현할 때** → **`CONTINUE.md`** 를 먼저 읽어주세요. (완료 현황, 다음 할 일, 파일 위치 정리)
 
 ## 개요
 `md_to_html` 프로젝트는 `https://md.takjakim.kr/`의 UI/UX를 참고한 개인용 클론입니다.  
-현재는 **단일 페이지 정적 앱(HTML/CSS/JS)** 형태로 구현되어 있으며, 마크다운 편집과 미리보기, HTML/PDF 내보내기, 설정/프리셋/도움말 모달을 제공합니다.
+**Vite 6 + ES 모듈** 기반 단일 페이지 앱으로, 마크다운 편집·실시간 미리보기, **HTML/PDF/DOCX** 내보내기, **프레젠테이션 모드**(`---` 슬라이드), **커스텀 CSS** 주입, 설정·프리셋·도움말 모달, PWA·폴더 연결(File System Access API)을 지원합니다.  
+실행: `npm run dev` (개발), `npm run build` (배포 빌드).
 
 ## 완료된 기능
 - 상단 툴바/포맷바/편집기/미리보기 패널 UI 구성
@@ -22,8 +23,9 @@
   - 여백
   - 표 스타일/제목 스타일
   - 페이지 나누기(H1/H2/H3)
-  - 특수 페이지(표지/목차/간지)
-  - 헤더/푸터 옵션
+  - 특수 페이지(표지/목차/간지), 목차 깊이·박스형 제목 깊이
+  - 헤더/푸터 옵션(맞춤 텍스트 6필드 포함)
+  - 커스텀 CSS (내보내기용)
   - 기타(줄바꿈 변환/이모지/구문 강조/배경 인쇄/특수페이지 헤더/푸터 숨기기)
 - 프리셋 저장/적용/삭제/내보내기/가져오기
 - 도움말(12단계) 모달
@@ -95,6 +97,13 @@
   - 원본 JSON·HTML 분석 반영: 표 스타일(줄무늬/thead 배경), orphans·widows 3, 코드 폰트(D2Coding), 링크 색, (선택) 프리셋 확장. `CONTINUE.md`에 이어하기 순서(3.1 → 4) 및 수정 위치 정리
 - Phase 3.1 구현 완료 *(2026-02-06)*
   - 3.1-1: 표 thead `#f0f0f0`, tbody 짝수 행 `#fafafa` / 3.1-2: `orphans: 3; widows: 3` / 3.1-3: 코드 폰트 D2Coding 선두, 인라인 코드 `:not(pre):not(.hljs) > code` 통일 / 3.1-4: 링크 색 `#0563c1`·인쇄 시 검정 유지 확인
+- Phase 3.1-5 프리셋 확장 *(2026-02-06)*
+  - 헤더/푸터 좌·중·우 "맞춤" 옵션 + 6개 맞춤 텍스트 필드, 목차 깊이(tocDepth), 박스형 제목 깊이(headingBoxDepth)
+- Phase 4 코드 아키텍처 개선 *(2026-02-06)*
+  - 4-1: Vite 6 + ES 모듈 (`src/` 분리, npm 패키지, HMR) / 4-2: 단일 `state` 객체 통합 / 4-3: PWA manifest + Service Worker / 4-4: File System Access API 폴더 연결
+- Phase 5-1 프레젠테이션 모드 *(2026-02-06)* — `---` 슬라이드 구분, 풀스크린, 키보드/버튼 이동
+- Phase 5-7 커스텀 CSS 주입 *(2026-02-06)* — 설정 `customCss`, 내보내기 HTML에 스타일 주입
+- Phase 5-5 DOCX 내보내기 *(2026-02-06)* — `docx` 패키지, 제목/표/목록/인용/코드 등 지원
 
 ## 해결된 이슈
 - 문서설정 팝업이 X 클릭으로 닫히지 않던 문제
@@ -155,23 +164,34 @@
 (분석 기준: 원본에서 저장한 `document (2).html`, 2026-02-06)
 
 ## 현재 파일 구조
-- `index.html`
-  - 전체 UI 레이아웃
-  - 모달(정보/프리셋/도움말/설정) 마크업 포함
-  - CDN: `markdown-it`, `highlight.js`
-- `styles.css`
-  - 레이아웃/모달/패널/테마 스타일
-  - `[hidden]` 처리 포함
-- `app.js`
-  - 모든 동작 로직
-  - 설정/프리셋/도움말/미리보기/내보내기 처리
+- `index.html` — 전체 UI, 모달 마크업, `<script type="module" src="/src/main.js">`
+- `styles.css` — 레이아웃/모달/패널/테마, `[hidden]` 처리
+- `app.js` — (레거시, 참고용) 이전 단일 파일 로직. 실제 동작은 `src/` 모듈 사용
+- `src/main.js` — 진입점, 초기화·모달·액션·SW 등록
+- `src/state.js` — 단일 state, loadSettings/saveSettings/loadMarkdown/loadPresets
+- `src/constants.js` — DEFAULT_SETTINGS, DEFAULT_MARKDOWN, HELP_STEPS, EMOJI_MAP, getTemplates()
+- `src/utils.js` — getMargin, getTextIndent, escapeHtml, formatDate, slugify, downloadFile, normalizeImportedPresetSettings
+- `src/render.js` — markdown-it, buildDocumentHtml, buildBaseStyles, parseFrontmatter, renderMarkdown
+- `src/editor.js` — 툴바·에디터 이벤트, undo/redo, 검색·치환, 이모지 자동완성
+- `src/preview.js` — updatePreview, setZoom, syncPreviewScroll, debouncedPreview
+- `src/settings.js` — bindSettings, handleSettingsChange, refreshSettingsForm
+- `src/export.js` — buildExportHtml, openPrintWindow, copyHtmlToClipboard, downloadFile
+- `src/export-docx.js` — DOCX 내보내기 (markdownToDocxBlob, exportDocx)
+- `src/presentation.js` — 프레젠테이션 모드 (getSlides, openPresentation, closePresentation)
+- `src/presets.js` — renderPresets, savePresetPrompt, applyPreset, importPresets 등
+- `src/folder.js` — File System Access API (requestFolderAccess)
+- `public/manifest.json` — PWA manifest
+- `public/sw.js` — Service Worker 캐시
+- `vite.config.js`, `package.json` — Vite 6, npm 스크립트 (dev/build/preview)
 
 ## 핵심 동작 흐름
 1) 편집기 입력 → `renderMarkdown()`  
-2) `buildDocumentHtml()`로 미리보기/내보내기용 HTML 생성  
+2) `buildDocumentHtml()`로 미리보기/내보내기용 HTML 생성 (설정 `customCss` 반영)  
 3) 미리보기는 iframe `srcdoc`로 렌더링  
 4) 설정 변경 시 CSS 변수로 즉시 반영  
 5) 편집창 너비는 splitter 드래그로 조절  
+6) 프레젠테이션: `---` 구분 슬라이드 → 풀스크린 오버레이  
+7) DOCX: 마크다운 → `docx` 패키지로 Word 문서 생성 후 다운로드  
 
 ## 중요한 구현 포인트
 - 마크다운 Frontmatter 파싱
@@ -298,34 +318,39 @@
 - [x] **3.1-4. 링크 색상 (화면용)** *(2026-02-06)*
   - 미리보기·내보내기 HTML에서 링크 색 `#0563c1` 적용됨(원본과 동일). 인쇄 시 `@media print`에서 검정/밑줄 제거 유지 확인
   - 적용 위치: `app.js` — `buildBaseStyles()` 내 `a` 및 `@media print` 내 `a` 규칙
-- [ ] **3.1-5. (선택) 프리셋 확장**
-  - 원본 JSON 기준: 헤더/푸터 맞춤 텍스트(headerLeftCustom 등), tocDepth, headingBoxDepth 등은 `docs/preset-improvement-ideas.md` 참고 후 필요 시 이후 Phase에서 반영
+- [x] **3.1-5. 프리셋 확장** *(2026-02-06)*
+  - 헤더/푸터 좌·중·우에 "맞춤" 옵션 + `headerLeftCustom` 등 6개 필드
+  - 목차 깊이 `tocDepth` (H1만 ~ H1~H6), 박스형 제목 깊이 `headingBoxDepth`
+  - 설정 패널: 맞춤 선택 시 입력란 표시, 목차 깊이/박스 깊이 선택 추가
+  - `normalizeImportedPresetSettings()`에 새 키 반영
 
 참고: 원본 HTML 분석은 `dev.md`의 "원본 사이트 HTML 내보내기 분석 (참고)" 섹션, 프리셋 항목은 `docs/preset-improvement-ideas.md`.
 
-### Phase 4 — 코드 아키텍처 개선 (난이도: ★★★)
+### Phase 4 — 코드 아키텍처 개선 (난이도: ★★★) ✅ 완료
 > 목표: 유지보수성 확보 및 빌드 체계 현대화
 
-- [ ] **4-1. Vite + ES Modules 전환**
-  - `app.js` → `editor.js`, `preview.js`, `settings.js`, `export.js`, `presets.js`, `utils.js` 분리
-  - CDN 의존성을 npm 패키지로 전환
-  - HMR(Hot Module Replacement) 개발 환경
-- [ ] **4-2. 상태 관리 통합**
-  - 전역 변수(`settings`, `zoom`, `helpIndex` 등)를 단일 `state` 객체로 통합
-  - 상태 변경 시 자동 UI 갱신 패턴 적용
-- [ ] **4-3. PWA + Service Worker**
-  - `manifest.json`으로 설치형 앱 동작
-  - CDN 리소스 캐시로 오프라인 사용 지원
-- [ ] **4-4. File System Access API**
-  - 폴더 연결 기능 (Chrome/Edge 지원)
-  - Electron 없이 로컬 파일/이미지 접근
+- [x] **4-1. Vite + ES Modules 전환** *(2026-02-06)*
+  - `app.js` → `src/editor.js`, `preview.js`, `settings.js`, `export.js`, `presets.js`, `utils.js`, `render.js`, `state.js`, `constants.js`, `folder.js` 분리
+  - CDN 의존성 → npm 패키지 (markdown-it, highlight.js, katex, mermaid)
+  - Vite 6 빌드, HMR 개발 환경 (`npm run dev`)
+- [x] **4-2. 상태 관리 통합** *(2026-02-06)*
+  - `src/state.js`에 단일 `state` 객체 (settings, zoom, helpIndex, undoStack, redoStack 등)
+  - 설정/프리셋 적용 시 `state.settings` 갱신 후 UI 동기화
+- [x] **4-3. PWA + Service Worker** *(2026-02-06)*
+  - `public/manifest.json` (이름, start_url, display: standalone)
+  - `public/sw.js`로 JS/CSS/HTML 캐시, 오프라인 지원
+  - `main.js`에서 Service Worker 등록
+- [x] **4-4. File System Access API** *(2026-02-06)*
+  - `src/folder.js`: `requestFolderAccess()` — `showDirectoryPicker()` (Chrome/Edge)
+  - 툴바 "폴더 연결" 버튼 클릭 시 API 호출, 미지원 시 안내 메시지
 
 ### Phase 5 — 차별화 고급 기능 (난이도: ★★★)
 > 목표: 원본 사이트를 초월하는 독자 기능
 
-- [ ] **5-1. 프레젠테이션 모드**
-  - `---`로 슬라이드 구분 (Marp 스타일)
-  - 풀스크린 프레젠테이션 뷰
+- [x] **5-1. 프레젠테이션 모드** *(2026-02-06)*
+  - `---`로 슬라이드 구분 (Marp 스타일), `src/presentation.js` — `getSlides()`, `openPresentation()`
+  - 풀스크린 오버레이, 이전/다음·키보드(←/→/Space/Esc), 슬라이드 카운터
+  - 툴바 "프레젠테이션" 버튼, Mermaid 슬라이드 자동 실행
 - [ ] **5-2. 다중 탭/문서**
   - 여러 마크다운 파일을 탭으로 동시 편집
   - 탭별 독립 설정/히스토리
@@ -333,17 +358,62 @@
   - 상태바에 단어 수, 원고지 매수(200자), 읽기 예상 시간 추가
 - [ ] **5-4. 버전 히스토리**
   - 자동 저장 시점 기록 및 diff 비교/복원
-- [ ] **5-5. DOCX 내보내기**
-  - `docx.js` 라이브러리로 Word 문서 직접 생성
-- [ ] **5-6. 반응형/모바일 지원**
+- [x] **5-5. DOCX 내보내기** *(2026-02-06)*
+  - `docx` npm 패키지로 Word 문서 직접 생성, `src/export-docx.js` — `markdownToDocxBlob()`, `exportDocx()`
+  - 제목/본문/표/목록/인용/코드 블록/구분선 지원, 툴바 "DOCX" 버튼
+- [ ] **5-6. 반응형/모바일 지원** (검토 예정)
   - 모바일 자동 편집 모드 전환, 터치 친화 UI
-- [ ] **5-7. 커스텀 CSS 주입**
-  - 사용자 직접 CSS 작성으로 내보내기 스타일 커스터마이징
+- [x] **5-7. 커스텀 CSS 주입** *(2026-02-06)*
+  - 설정에 `customCss` 추가, HTML/PDF 내보내기 시 `<style>` 블록으로 주입
+  - 설정 패널 "커스텀 CSS (내보내기)" 아코디언 + textarea
+
+---
+
+## 현재까지 개발 완료 요약
+
+| 구분 | 내용 |
+|------|------|
+| **Phase 1** | 키보드 단축키, 동기 스크롤, 헤딩 동기화, Splitter 저장, 단일 아코디언, 자동저장 표시, 디바운스, 탭 제목 |
+| **Phase 2** | HTML/PDF 템플릿 고도화, @media print, 코드 블록 테마, HTML 클립보드 복사 |
+| **Phase 3** | KaTeX, Mermaid, 이미지 붙여넣기·드래그앤드롭, 검색/치환, 이모지 자동완성, 각주, 템플릿, 공유 URL |
+| **Phase 3.1** | 표 스타일(thead #f0f0f0, tbody 짝수 행 #fafafa), orphans/widows 3, 코드 폰트 D2Coding, 링크 색 |
+| **Phase 3.1-5** | 프리셋 확장(헤더/푸터 맞춤 6필드, tocDepth, headingBoxDepth) |
+| **Phase 4** | Vite + ES 모듈 분리, 단일 state 통합, PWA + Service Worker, File System Access API 폴더 연결 |
+| **Phase 5-1** | 프레젠테이션 모드 (--- 슬라이드, 풀스크린) |
+| **Phase 5-7** | 커스텀 CSS 주입 (내보내기 스타일) |
+| **Phase 5-5** | DOCX 내보내기 (Word 문서 생성) |
+
+---
+
+## 이후 개발 진행할 사항 (Phase 5)
+
+다음 단계는 **Phase 5 — 차별화 고급 기능**입니다. 원본 사이트를 넘어서는 독자 기능을 목표로 합니다.
+
+| 순번 | 항목 | 난이도 | 설명 |
+|------|------|--------|------|
+| **5-1** | 프레젠테이션 모드 | ★★★ ✅ | `---`로 슬라이드 구분(Marp 스타일), 풀스크린 프레젠테이션 뷰 |
+| **5-2** | 다중 탭/문서 | ★★★ | 여러 마크다운 파일을 탭으로 동시 편집, 탭별 독립 설정·히스토리 *(검토 예정)* |
+| **5-3** | 원고지 매수/읽기 시간 | ★★☆ | 상태바에 단어 수, 원고지 매수(200자 기준), 읽기 예상 시간 표시 *(검토 예정)* |
+| **5-4** | 버전 히스토리 | ★★★ | 자동 저장 시점 기록, diff 비교·복원 *(검토 예정)* |
+| **5-5** | DOCX 내보내기 | ★★★ ✅ | `docx` 패키지로 Word 문서 직접 생성 |
+| **5-6** | 반응형/모바일 지원 | ★★★ | 모바일 자동 편집 모드, 터치 친화 UI *(검토 예정)* |
+| **5-7** | 커스텀 CSS 주입 | ★★☆ ✅ | 사용자 CSS로 내보내기 스타일 커스터마이징 |
+
+**완료 (5-1 → 5-7 → 5-5 순)**  
+- **5-1** 프레젠테이션 모드 ✅  
+- **5-7** 커스텀 CSS 주입 ✅  
+- **5-5** DOCX 내보내기 ✅  
+
+**검토 예정 (추가 논의 후 진행)**  
+- **5-2** 다중 탭/문서, **5-3** 원고지 매수·읽기 시간, **5-4** 버전 히스토리, **5-6** 반응형/모바일
+
+상세 스펙은 위 "개선 로드맵" Phase 5 블록 참고.
 
 ---
 
 ## 메모
-- 현재 프로젝트는 순수 정적 앱이라 로컬에서 바로 열 수 있음
-- 실행: `D:\GITHUB\Cursor\md_to_html\index.html`
-- 원본 사이트: `https://md.takjakim.kr/` (Vite 기반, 소스 비공개)
-- 원본 개발자: `takjakim` (GitHub, Marp 테마/투자 분석 자동화 관심)
+- **실행**: `npm run dev` (개발 서버 + HMR), `npm run build` 후 `npm run preview` 또는 `dist/` 배포
+- 로컬에서 `index.html` 직접 열면 ES 모듈 경로 때문에 동작하지 않을 수 있음 — Vite 서버 사용 권장
+- **의존성**: markdown-it, highlight.js, katex, mermaid, docx (npm)
+- **원본 사이트**: `https://md.takjakim.kr/` (Vite 기반, 소스 비공개) · 개발자: takjakim
+- **문서 최신화**: 2026-02-06 — Phase 1~4, 3.1, 3.1-5, 5-1/5-7/5-5 완료 반영. 다음 세션은 `CONTINUE.md` 먼저 참고.

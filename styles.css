@@ -445,14 +445,26 @@ body.settings-open .workspace {
   color: #333;
 }
 
+.field .custom-input {
+  margin-top: 4px;
+  display: none;
+}
+
 .field input,
-.field select {
+.field select,
+.field textarea {
   padding: 6px 8px;
   border: 1px solid var(--ui-border);
   border-radius: 6px;
   background: var(--ui-panel);
   color: var(--ui-text);
   min-width: 160px;
+}
+
+.field textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
 }
 
 .field-grid {
@@ -580,4 +592,115 @@ body.settings-open .workspace {
 .template-name {
   font-size: 14px;
   font-weight: 600;
+}
+
+/* ===== Phase 5-1: 프레젠테이션 모드 ===== */
+body.presentation-active {
+  overflow: hidden;
+}
+
+.presentation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: var(--preview-bg, #fff);
+  color: var(--preview-text, #1a1a1a);
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+[data-theme="dark"] .presentation-overlay {
+  background: #1e1e1e;
+  color: #e0e0e0;
+}
+
+.presentation-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  z-index: 2;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+
+.presentation-close:hover {
+  opacity: 1;
+}
+
+.presentation-slide-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+}
+
+.presentation-slide {
+  position: absolute;
+  inset: 48px;
+  display: none;
+  overflow: auto;
+  padding: 24px 48px;
+  font-size: clamp(14px, 2.2vw, 22px);
+  line-height: 1.5;
+}
+
+.presentation-slide.presentation-slide-active {
+  display: block;
+}
+
+.presentation-slide h1 { font-size: 1.8em; margin-top: 0; }
+.presentation-slide h2 { font-size: 1.4em; }
+.presentation-slide h3 { font-size: 1.2em; }
+.presentation-slide pre { font-size: 0.85em; }
+.presentation-slide code { font-size: 0.9em; }
+
+.presentation-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 16px;
+  background: var(--ui-bg);
+  border-top: 1px solid var(--ui-border);
+}
+
+.presentation-prev,
+.presentation-next {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.presentation-prev:hover,
+.presentation-next:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.presentation-counter {
+  font-size: 14px;
+  color: var(--ui-text-muted);
+  min-width: 4em;
+  text-align: center;
 }

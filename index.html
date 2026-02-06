@@ -19,6 +19,7 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css"
     />
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="manifest" href="/manifest.json" />
   </head>
   <body data-theme="light">
     <div class="app">
@@ -41,6 +42,7 @@
           <div class="group">
             <button type="button" class="btn" data-action="export-html">HTML</button>
             <button type="button" class="btn" data-action="export-pdf">PDF</button>
+            <button type="button" class="btn" data-action="export-docx">DOCX</button>
             <button type="button" class="btn" data-action="copy-html">복사</button>
           </div>
           <div class="group">
@@ -48,6 +50,7 @@
             <button type="button" class="btn active" data-view="split">분할</button>
             <button type="button" class="btn" data-view="preview">미리보기</button>
           </div>
+          <button type="button" class="btn" data-action="presentation">프레젠테이션</button>
           <button type="button" class="btn" data-action="share">공유</button>
           <button type="button" class="btn" data-action="toggle-theme">라이트</button>
           <button type="button" class="btn" data-action="help">도움말</button>
@@ -271,6 +274,17 @@
                 <option value="boxed">박스</option>
               </select>
             </div>
+            <div class="field heading-box-depth-field">
+              <label>박스형 제목 깊이</label>
+              <select id="headingBoxDepth">
+                <option value="1">H1만</option>
+                <option value="2">H1~H2</option>
+                <option value="3">H1~H3</option>
+                <option value="4">H1~H4</option>
+                <option value="5">H1~H5</option>
+                <option value="6">H1~H6</option>
+              </select>
+            </div>
           </details>
 
           <details class="settings-accordion">
@@ -294,6 +308,17 @@
             <label class="checkbox">
               <input type="checkbox" id="tocPage" /> 목차 페이지
             </label>
+            <div class="field">
+              <label>목차 깊이</label>
+              <select id="tocDepth">
+                <option value="1">H1만</option>
+                <option value="2">H1~H2</option>
+                <option value="3">H1~H3</option>
+                <option value="4">H1~H4</option>
+                <option value="5">H1~H5</option>
+                <option value="6">H1~H6</option>
+              </select>
+            </div>
             <label class="checkbox">
               <input type="checkbox" id="dividerPage" /> 간지 페이지
             </label>
@@ -313,21 +338,30 @@
               <select id="headerLeft">
                 <option value="title">제목</option>
                 <option value="none">없음</option>
+                <option value="date">날짜</option>
+                <option value="custom">맞춤</option>
               </select>
+              <input type="text" id="headerLeftCustom" placeholder="맞춤 텍스트" class="custom-input" />
             </div>
             <div class="field">
               <label>가운데</label>
               <select id="headerCenter">
                 <option value="none">없음</option>
                 <option value="title">제목</option>
+                <option value="date">날짜</option>
+                <option value="custom">맞춤</option>
               </select>
+              <input type="text" id="headerCenterCustom" placeholder="맞춤 텍스트" class="custom-input" />
             </div>
             <div class="field">
               <label>오른쪽</label>
               <select id="headerRight">
                 <option value="date">날짜</option>
                 <option value="none">없음</option>
+                <option value="title">제목</option>
+                <option value="custom">맞춤</option>
               </select>
+              <input type="text" id="headerRightCustom" placeholder="맞춤 텍스트" class="custom-input" />
             </div>
           </details>
 
@@ -345,21 +379,39 @@
               <select id="footerLeft">
                 <option value="none">없음</option>
                 <option value="title">제목</option>
+                <option value="date">날짜</option>
+                <option value="custom">맞춤</option>
               </select>
+              <input type="text" id="footerLeftCustom" placeholder="맞춤 텍스트" class="custom-input" />
             </div>
             <div class="field">
               <label>가운데</label>
               <select id="footerCenter">
                 <option value="pageNumber">페이지 번호</option>
                 <option value="none">없음</option>
+                <option value="title">제목</option>
+                <option value="date">날짜</option>
+                <option value="custom">맞춤</option>
               </select>
+              <input type="text" id="footerCenterCustom" placeholder="맞춤 텍스트" class="custom-input" />
             </div>
             <div class="field">
               <label>오른쪽</label>
               <select id="footerRight">
                 <option value="none">없음</option>
                 <option value="date">날짜</option>
+                <option value="title">제목</option>
+                <option value="custom">맞춤</option>
               </select>
+              <input type="text" id="footerRightCustom" placeholder="맞춤 텍스트" class="custom-input" />
+            </div>
+          </details>
+
+          <details class="settings-accordion">
+            <summary>커스텀 CSS (내보내기)</summary>
+            <div class="field">
+              <label>HTML/PDF 내보내기 시 적용할 CSS</label>
+              <textarea id="customCss" rows="8" placeholder="예: .hwp-content h1 { color: #0066cc; }"></textarea>
             </div>
           </details>
 
@@ -399,10 +451,6 @@
 
     <input type="file" id="fileInput" accept=".md,.txt" hidden />
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/13.0.2/markdown-it.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.4.1/mermaid.min.js"></script>
-    <script src="./app.js"></script>
+    <script type="module" src="/src/main.js"></script>
   </body>
 </html>

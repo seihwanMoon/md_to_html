@@ -1,0 +1,364 @@
+import MarkdownIt from "markdown-it";
+import hljs from "highlight.js";
+import katex from "katex";
+import { state } from "./state.js";
+import { EMOJI_MAP } from "./constants.js";
+import { getMargin, getTextIndent, escapeHtml, formatDate } from "./utils.js";
+import { slugify } from "./utils.js";
+
+function replaceEmojis(text) {
+  return text.replace(/:([a-z0-9_]+):/g, (match, name) => EMOJI_MAP[name] || match);
+}
+
+const md = new MarkdownIt({
+  html: true,
+  linkify: true,
+  typographer: true,
+  breaks: state.settings.breaks,
+  highlight(code, lang) {
+    if (lang === "mermaid") {
+      return `<div class="mermaid">${escapeHtml(code)}</div>`;
+    }
+    if (!state.settings.highlight) return "";
+    if (lang && hljs.getLanguage(lang)) {
+      return hljs.highlight(code, { language: lang }).value;
+    }
+    return hljs.highlightAuto(code).value;
+  },
+});
+
+const originalHeadingOpen =
+  md.renderer.rules.heading_open ||
+  function (tokens, idx, options, env, self) {
+    return self.renderToken(tokens, idx, options);
+  };
+
+md.renderer.rules.heading_open = function (tokens, idx, options, env, self) {
+  const token = tokens[idx];
+  const next = tokens[idx + 1];
+  const text = next && next.content ? next.content : "";
+  if (text) token.attrSet("id", slugify(text));
+  return originalHeadingOpen(tokens, idx, options, env, self);
+};
+
+function renderFootnotes(html) {
+  const footnotes = [];
+  let index = 0;
+  html = html.replace(/\[\^([^\]]+?)\]:\s*(.+)/g, (_, id, text) => {
+    footnotes.push({ id, text: text.trim() });
+    return "";
+  });
+  html = html.replace(/\[\^([^\]]+?)\]/g, (_, id) => {
+    index += 1;
+    return `<sup class="footnote-ref"><a href="#fn-${id}" id="fnref-${id}">[${index}]</a></sup>`;
+  });
+  if (footnotes.length > 0) {
+    const footnotesHtml = footnotes
+      .map((fn) => `<li id="fn-${fn.id}"><p>${fn.text} <a href="#fnref-${fn.id}" class="footnote-backref">↩</a></p></li>`)
+      .join("\n");
+    html += `\n<hr class="footnotes-sep">\n<section class="footnotes">\n<ol>\n${footnotesHtml}\n</ol>\n</section>`;
+  }
+  return html;
+}
+
+function renderKatex(html) {
+  html = html.replace(/\$\$([^$]+?)\$\$/g, (_, expr) => {
+    try {
+      return katex.renderToString(expr.trim(), { displayMode: true, throwOnError: false });
+    } catch (e) {
+      return `<span class="katex-error">${escapeHtml(expr)}</span>`;
+    }
+  });
+  html = html.replace(/\$([^$\n]+?)\$/g, (_, expr) => {
+    try {
+      return katex.renderToString(expr.trim(), { displayMode: false, throwOnError: false });
+    } catch (e) {
+      return `<span class="katex-error">${escapeHtml(expr)}</span>`;
+    }
+  });
+  return html;
+}
+
+export function parseFrontmatter(text) {
+  const match = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!match) return { frontmatter: {}, body: text };
+  const raw = match[1];
+  const body = match[2];
+  const frontmatter = {};
+  raw.split("\n").forEach((line) => {
+    const [key, ...rest] = line.split(":");
+    if (!key) return;
+    frontmatter[key.trim()] = rest.join(":").trim();
+  });
+  return { frontmatter, body };
+}
+
+function extractHeadings(tokens) {
+  const headings = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token.type === "heading_open") {
+      const level = Number(token.tag.replace("h", ""));
+      const text = tokens[i + 1] && tokens[i + 1].content ? tokens[i + 1].content : "";
+      const id = slugify(text || `heading-${i}`);
+      headings.push({ level, text, id });
+    }
+  }
+  return headings;
+}
+
+function resolveHeaderFooterValue(type, frontmatter, slot) {
+  if (type === "none") return "";
+  if (type === "custom" && slot) {
+    const customKey = slot + "Custom";
+    const val = state.settings[customKey];
+    return escapeHtml(typeof val === "string" ? val : "");
+  }
+  if (type === "title") return escapeHtml(frontmatter.title || "");
+  if (type === "date") return escapeHtml(frontmatter.date || formatDate(new Date()));
+  if (type === "page" || type === "pageNumber") return "1 / 1";
+  return "";
+}
+
+function buildHeader(frontmatter) {
+  const s = state.settings;
+  const left = resolveHeaderFooterValue(s.headerLeft, frontmatter, "headerLeft");
+  const center = resolveHeaderFooterValue(s.headerCenter, frontmatter, "headerCenter");
+  const right = resolveHeaderFooterValue(s.headerRight, frontmatter, "headerRight");
+  return `<header class="hwp-header">
+    <div>${left}</div>
+    <div>${center}</div>
+    <div>${right}</div>
+  </header>`;
+}
+
+function buildFooter(frontmatter) {
+  const s = state.settings;
+  const left = resolveHeaderFooterValue(s.footerLeft, frontmatter, "footerLeft");
+  const center = resolveHeaderFooterValue(s.footerCenter, frontmatter, "footerCenter");
+  const right = resolveHeaderFooterValue(s.footerRight, frontmatter, "footerRight");
+  return `<footer class="hwp-footer">
+    <div>${left}</div>
+    <div>${center}</div>
+    <div>${right}</div>
+  </footer>`;
+}
+
+function buildCover(frontmatter) {
+  return `<section class="hwp-cover-page">
+    <div class="hwp-cover-org">${escapeHtml(frontmatter.organization || "")}</div>
+    <div class="hwp-cover-title">${escapeHtml(frontmatter.title || "제목")}</div>
+    <div class="hwp-cover-subtitle">${escapeHtml(frontmatter.subtitle || "")}</div>
+    <div class="hwp-cover-meta">
+      <div class="hwp-cover-date">${escapeHtml(frontmatter.date || formatDate(new Date()))}</div>
+      <div class="hwp-cover-author">${escapeHtml(frontmatter.author || "")}</div>
+    </div>
+  </section>`;
+}
+
+function buildToc(tocHtml) {
+  return `<section class="hwp-toc-page">
+    <div class="hwp-toc-heading">목차</div>
+    <div class="hwp-toc-list">${tocHtml || "<p>목차가 없습니다.</p>"}</div>
+  </section>`;
+}
+
+function buildDivider(headings) {
+  if (!headings.length) return "";
+  const first = headings.find((h) => h.level === 1) || headings[0];
+  return `<section class="hwp-divider-page">
+    <div class="hwp-divider-title">${escapeHtml(first.text || "구분")}</div>
+  </section>`;
+}
+
+function buildBaseStyles({ forExport }) {
+  const s = state.settings;
+  const margin = getMargin(s);
+  const scale = forExport ? s.scale : state.zoom;
+  const breakStyles = [
+    s.pageBreakBeforeH1 ? "h1 { page-break-before: always; }" : "",
+    s.pageBreakBeforeH2 ? "h2 { page-break-before: always; }" : "",
+    s.pageBreakBeforeH3 ? "h3 { page-break-before: always; }" : "",
+  ].join("\n");
+
+  const fontMap = {
+    "nanum-gothic": "'Nanum Gothic', sans-serif",
+    "nanum-myeongjo": "'Nanum Myeongjo', serif",
+    "noto-serif-kr": "'Noto Serif KR', serif",
+    pretendard: "'Pretendard Variable', sans-serif",
+  };
+  const fontStack = fontMap[s.fontFamily] || fontMap["nanum-gothic"];
+
+  return `
+    @page { size: A4; margin: ${margin.top} ${margin.right} ${margin.bottom} ${margin.left}; }
+    @media print {
+      body { margin: 0; }
+      .hwp-header { position: running(hwpHeader); }
+      .hwp-footer { position: running(hwpFooter); }
+      .hwp-cover-page, .hwp-toc-page, .hwp-divider-page { page-break-after: always; }
+      table, pre, blockquote, img { page-break-inside: avoid; }
+      h1, h2, h3, h4, h5, h6 { page-break-after: avoid; page-break-inside: avoid; }
+      a { color: #000 !important; text-decoration: none !important; }
+      a[href]::after { content: none !important; }
+    }
+    :root {
+      --hwp-font-family: ${fontStack};
+      --hwp-font-size: ${s.fontSize}pt;
+      --hwp-line-height: ${s.lineHeight};
+      --hwp-word-break: ${s.wordBreak};
+      --hwp-indent: ${getTextIndent(s)}px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: var(--hwp-font-family);
+      font-size: var(--hwp-font-size);
+      line-height: var(--hwp-line-height);
+      word-break: var(--hwp-word-break);
+      margin: ${margin.top} ${margin.right} ${margin.bottom} ${margin.left};
+      color: #000; background: #fff; text-align: justify;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+    p { margin: 0.4em 0; text-indent: var(--hwp-indent); orphans: 3; widows: 3; }
+    h1, h2, h3, h4, h5, h6 { font-weight: bold; margin: 1.2em 0 0.5em; page-break-after: avoid; text-indent: 0; }
+    h1 { font-size: 16pt; border-bottom: 2px solid #000; padding-bottom: 0.3em; }
+    h2 { font-size: 14pt; border-bottom: 1px solid #333; padding-bottom: 0.2em; }
+    h3 { font-size: 12pt; } h4 { font-size: 11pt; } h5, h6 { font-size: 10pt; color: #333; }
+    table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 9pt; border-top: 2px solid #000; border-bottom: 2px solid #000; page-break-inside: avoid; }
+    table thead th { background: #f0f0f0; border-top: 2px solid #000; border-bottom: 2px solid #000; border-left: 1px solid #999; border-right: 1px solid #999; padding: 8px 10px; text-align: center; font-weight: bold; font-size: 9pt; }
+    table thead th:first-child { border-left: none; } table thead th:last-child { border-right: none; }
+    table tbody td { border-bottom: 1px solid #ccc; border-left: 1px solid #ddd; border-right: 1px solid #ddd; padding: 6px 10px; vertical-align: top; }
+    table tbody td:first-child { border-left: none; } table tbody td:last-child { border-right: none; }
+    table tbody tr:nth-child(even) { background: #fafafa; }
+    table tbody tr:last-child td { border-bottom: none; }
+    table caption { caption-side: top; text-align: left; font-size: 9pt; font-weight: bold; padding: 4px 0; color: #333; }
+    blockquote { border-left: 3px solid #333; background: #f9f9f9; padding: 0.5em 1em; margin: 1em 0; color: #222; page-break-inside: avoid; }
+    blockquote p { text-indent: 0; }
+    pre { background: #f5f5f5; border: 1px solid #ddd; padding: 12px 16px; border-radius: 2px; overflow-x: auto; font-size: 9pt; white-space: pre-wrap; word-wrap: break-word; page-break-inside: avoid; }
+    code { font-family: 'D2Coding', 'Nanum Gothic Coding', 'Consolas', 'Courier New', monospace; }
+    :not(pre):not(.hljs) > code { background: #f0f0f0; padding: 0.15em 0.3em; border-radius: 2px; font-size: 0.9em; border: 1px solid #e0e0e0; }
+    hr { border: none; border-top: 1px solid #000; margin: 1.5em 0; }
+    a { color: #0563c1; text-decoration: underline; }
+    img { max-width: 100%; height: auto; page-break-inside: avoid; }
+    ul, ol { margin: 0.5em 0; padding-left: 2em; }
+    li { margin: 0.2em 0; } li p { text-indent: 0; margin: 0.2em 0; }
+    li.task-list-item { list-style: none; margin-left: -1.5em; }
+    li.task-list-item input[type="checkbox"] { margin-right: 0.4em; }
+    .hwp-header { font-size: ${s.headerFontSize}px; display: flex; justify-content: space-between; align-items: center; color: #888; border-bottom: 1px solid #ccc; padding: 0.3em 0 0.5em; margin-bottom: 1em; }
+    .hwp-footer { font-size: ${s.footerFontSize}px; display: flex; justify-content: space-between; align-items: center; color: #888; border-top: 1px solid #ccc; padding: 0.5em 0 0.3em; margin-top: 1em; }
+    .hwp-cover-page { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; text-align: center; page-break-after: always; padding: 0 2em; }
+    .hwp-cover-org { font-size: 14pt; color: #333; margin-bottom: 3em; letter-spacing: 0.15em; }
+    .hwp-cover-title { font-size: 28pt; font-weight: bold; margin-bottom: 0.5em; border-bottom: 3px double #000; padding-bottom: 0.4em; }
+    .hwp-cover-subtitle { font-size: 16pt; color: #555; margin-bottom: 3em; }
+    .hwp-cover-meta { margin-top: auto; padding-bottom: 3em; text-align: center; }
+    .hwp-cover-date { font-size: 12pt; margin-bottom: 0.5em; }
+    .hwp-cover-author { font-size: 12pt; font-weight: bold; }
+    .hwp-toc-page { padding-top: 2em; page-break-after: always; }
+    .hwp-toc-heading { font-size: 20pt; font-weight: bold; text-align: center; margin-bottom: 2em; letter-spacing: 0.3em; }
+    .hwp-toc-item { display: flex; align-items: baseline; padding: 0.25em 0; }
+    .hwp-toc-item a { color: #000; text-decoration: none; }
+    .hwp-toc-item::after { content: ""; flex: 1; border-bottom: 1px dotted #999; margin: 0 0.4em; position: relative; bottom: 0.25em; }
+    .hwp-toc-level-1 { font-size: 11pt; font-weight: bold; }
+    .hwp-toc-level-2 { font-size: 10pt; padding-left: 1.5em; }
+    .hwp-toc-level-3 { font-size: 9pt; padding-left: 3em; color: #333; }
+    .hwp-divider-page { display: flex; justify-content: center; align-items: center; min-height: 100vh; page-break-after: always; }
+    .hwp-divider-title { font-size: 24pt; font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 0.3em; }
+    ${(() => {
+      const boxDepth = Math.min(6, Math.max(1, s.headingBoxDepth ?? 3));
+      const selectors = Array.from({ length: boxDepth }, (_, i) => `.hwp-content.boxed h${i + 1}`).join(", ");
+      const rules = [
+        `${selectors} { border: none; padding: 8px 12px; background: #f4f4f4; border-left: 4px solid #333; border-radius: 0; }`,
+        ".hwp-content.boxed h1 { border-left-width: 6px; border-left-color: #000; }",
+        ".hwp-content.boxed h2 { border-left-width: 4px; border-left-color: #333; }",
+        ".hwp-content.boxed h3 { border-left-width: 3px; border-left-color: #666; background: #f8f8f8; }",
+      ];
+      return rules.join("\n    ");
+    })()}
+    .hwp-content { transform: scale(${scale}); transform-origin: top left; }
+    ${breakStyles}
+    .special-hide .hwp-header, .special-hide .hwp-footer { display: none; }
+    .footnote-ref a { color: #0563c1; text-decoration: none; font-size: 0.8em; }
+    .footnotes-sep { margin-top: 2em; }
+    .footnotes { font-size: 9pt; color: #555; }
+    .footnotes ol { padding-left: 1.5em; }
+    .footnotes li { margin: 0.3em 0; }
+    .footnote-backref { text-decoration: none; color: #0563c1; }
+  `;
+}
+
+export function renderMarkdown(content) {
+  md.set({ breaks: state.settings.breaks });
+  const { frontmatter, body } = parseFrontmatter(content);
+  const source = state.settings.emoji ? replaceEmojis(body) : body;
+  const env = {};
+  const tokens = md.parse(source, env);
+  const headings = extractHeadings(tokens);
+  let html = md.renderer.render(tokens, md.options, env);
+  html = renderFootnotes(html);
+  html = renderKatex(html);
+  const tocHtml = headings
+    .map((h) => {
+      const cls = `hwp-toc-level-${h.level}`;
+      return `<div class="hwp-toc-item ${cls}"><a href="#${h.id}">${escapeHtml(h.text)}</a><span class="hwp-toc-page-num"> </span></div>`;
+    })
+    .join("");
+  return { bodyHtml: html, tocHtml, frontmatter, headings };
+}
+
+export function buildDocumentHtml(content, { forExport }) {
+  const { bodyHtml, tocHtml, frontmatter, headings } = renderMarkdown(content);
+  const header = buildHeader(frontmatter);
+  const footer = buildFooter(frontmatter);
+  const cover = state.settings.coverPage ? buildCover(frontmatter) : "";
+  const tocDepth = Math.min(6, Math.max(1, state.settings.tocDepth ?? 3));
+  const filteredTocHeadings = headings.filter((h) => h.level <= tocDepth);
+  const tocHtmlFiltered = filteredTocHeadings
+    .map((h) => {
+      const cls = `hwp-toc-level-${h.level}`;
+      return `<div class="hwp-toc-item ${cls}"><a href="#${h.id}">${escapeHtml(h.text)}</a><span class="hwp-toc-page-num"> </span></div>`;
+    })
+    .join("");
+  const toc = state.settings.tocPage ? buildToc(tocHtmlFiltered) : "";
+  const divider = state.settings.dividerPage ? buildDivider(headings) : "";
+  const hideHeaderFooterClass =
+    state.settings.hideHeaderFooterOnSpecialPages && (state.settings.coverPage || state.settings.tocPage || state.settings.dividerPage)
+      ? "special-hide"
+      : "";
+  const headingClass = state.settings.headingStyle === "boxed" ? "boxed" : "basic";
+  const margin = getMargin(state.settings);
+  const isDark = !forExport && document.body.dataset.theme === "dark";
+  const highlightTheme = isDark ? "tomorrow-night" : "tomorrow";
+  const highlightCss = state.settings.highlight
+    ? `<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${highlightTheme}.min.css">`
+    : "";
+  const fontsCss = `<link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&family=Nanum+Myeongjo:wght@400;700;800&family=Nanum+Gothic+Coding:wght@400;700&family=Noto+Serif+KR:wght@400;700&family=Pretendard+Variable:wght@400;700&display=swap" rel="stylesheet">`;
+  const katexCss = `<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">`;
+  const hasMermaid = bodyHtml.includes('<div class="mermaid">');
+  const mermaidScript = hasMermaid
+    ? `<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.4.1/mermaid.min.js"><\/script>
+  <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });<\/script>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${escapeHtml(frontmatter.title || "문서")}</title>
+  ${fontsCss}
+  ${highlightCss}
+  ${katexCss}
+  <style>${buildBaseStyles({ forExport })}</style>
+  ${(state.settings.customCss || "").trim() ? `<style>/* 커스텀 CSS */\n${state.settings.customCss.trim()}</style>` : ""}
+</head>
+<body class="${hideHeaderFooterClass}">
+  ${state.settings.headerEnabled ? header : ""}
+  ${cover}
+  ${toc}
+  ${divider}
+  <main class="hwp-content ${headingClass}">${bodyHtml}</main>
+  ${state.settings.footerEnabled ? footer : ""}
+  ${mermaidScript}
+</body>
+</html>`;
+}

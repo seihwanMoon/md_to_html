@@ -1,0 +1,11 @@
+{
+  "name": "마크다운ㅎ글",
+  "short_name": "마ㅎ글",
+  "description": "마크다운을 아래한글 형식으로",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff",
+  "theme_color": "#333",
+  "orientation": "any",
+  "lang": "ko"
+}

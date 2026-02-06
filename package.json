@@ -1,0 +1,21 @@
+{
+  "name": "md-to-html",
+  "version": "1.0.0",
+  "description": "마크다운을 아래한글 형식 HTML/PDF로 변환",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "docx": "^9.5.1",
+    "highlight.js": "^11.9.0",
+    "katex": "^0.16.9",
+    "markdown-it": "^14.0.0",
+    "mermaid": "^11.4.1"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
