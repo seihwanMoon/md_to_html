@@ -80,6 +80,7 @@
           <button class="btn small" data-action="redo">다시 실행</button>
           <button class="btn small" data-insert="table">표</button>
           <button class="btn small" data-insert="hr">수평선</button>
+          <button class="btn small" data-insert="pagebreak" title="PDF 인쇄 시 여기서 새 페이지">페이지 나누기</button>
           <button class="btn small" data-insert="code-block">코드 블록</button>
           <button class="btn small" data-insert="quote">인용</button>
           <button class="btn small" data-insert="link">링크</button>
@@ -404,6 +405,22 @@
                 <option value="custom">맞춤</option>
               </select>
               <input type="text" id="footerRightCustom" placeholder="맞춤 텍스트" class="custom-input" />
+            </div>
+            <div class="field">
+              <label>페이지 번호 시작</label>
+              <input type="number" id="pageNumberStart" min="1" step="1" title="페이지 나눔(\\newpage) 사용 시 첫 페이지에 표시할 번호" />
+            </div>
+            <div class="field">
+              <label>페이지 번호 형식</label>
+              <select id="pageNumberFormat">
+                <option value="current/total">현재 / 총 (예: 1 / 5)</option>
+                <option value="current">현재만 (예: 1)</option>
+                <option value="custom">맞춤 (아래에 형식 입력)</option>
+              </select>
+            </div>
+            <div class="field page-number-custom-field">
+              <label>맞춤 형식</label>
+              <input type="text" id="pageNumberCustom" placeholder="{{page}} / {{total}}" title="{{page}}=현재 페이지, {{total}}=총 페이지" />
             </div>
           </details>
 

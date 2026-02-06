@@ -27,6 +27,8 @@
 | **Phase 5-1** | 프레젠테이션 모드 | ✅ 완료 |
 | **Phase 5-7** | 커스텀 CSS 주입 | ✅ 완료 |
 | **Phase 5-5** | DOCX 내보내기 | ✅ 완료 |
+| **PDF/페이지 나눔** | 페이지 나눔 문법·버튼, 헤더/푸터 구간별 반복, 미리보기 페이지 단위, 푸터 A4 하단, 페이지 번호 동적 표시 | ✅ 완료 |
+| **PDF/페이지 나눔 보강** | 푸터 인쇄 반영(segment 내 position:static·높이 조정), 미리보기 flex 푸터 하단, 페이지 번호 설정(시작·형식·맞춤) | ✅ 완료 |
 
 상세 내역은 **`dev.md`** 의 "개선 로드맵" 및 "완료된 기능" 섹션 참고.
 
@@ -34,9 +36,10 @@
 
 ## 다음에 할 일
 
-- **완료**: Phase 1~4, Phase 3.1, Phase 3.1-5, Phase 5-1(프레젠테이션), 5-7(커스텀 CSS), 5-5(DOCX).
+- **완료**: Phase 1~4, Phase 3.1, Phase 3.1-5, Phase 5-1/5-7/5-5, DOCX 개선, PDF 정교화(페이지 나눔·푸터 하단·페이지 번호), PDF/페이지 나눔 보강(푸터 인쇄 반영·페이지 번호 설정).
 - **검토 예정**: Phase 5-2(다중 탭), 5-3(원고지 매수·읽기 시간), 5-4(버전 히스토리), 5-6(반응형/모바일).
-- 이후: 위 Phase 5 잔여 항목 검토 또는 신규 기능 논의. 상세 로드맵은 **`dev.md`** Phase 5 블록 참고.
+- **PDF 추가 개선**(선택): `docs/pdf-export-improvement.md` 트랙 A(폰트 임베드·@page 정리), 트랙 B(html2pdf.js 직접 다운로드).
+- 이후: 위 Phase 5 잔여 항목 검토 또는 PDF 트랙 A/B, 신규 기능 논의. 상세 로드맵은 **`dev.md`** Phase 5 블록 참고.
 
 ---
 
@@ -48,7 +51,7 @@
 | `CONTINUE.md` | **이어하기 가이드** — 완료 현황, 다음 할 일, 파일 위치 |
 | `src/main.js` | 진입점, 초기화·모달·액션·SW 등록 |
 | `src/state.js` | 단일 state, loadSettings, loadMarkdown, loadPresets |
-| `src/render.js` | buildDocumentHtml, buildBaseStyles, parseFrontmatter, customCss 반영 |
+| `src/render.js` | buildDocumentHtml, 페이지 나눔·segment-page·preview-page·hwp-page-number, buildHeader/Footer(pageInfo), 페이지 번호 형식 |
 | `src/editor.js` | 툴바·에디터·undo/redo·검색·이모지 |
 | `src/preview.js` | updatePreview, setZoom, syncPreviewScroll |
 | `src/settings.js` | bindSettings, refreshSettingsForm (customCss 포함) |
@@ -61,6 +64,7 @@
 | `styles.css` | 레이아웃, 테마, 모달, 프레젠테이션 오버레이 |
 | `public/manifest.json`, `public/sw.js` | PWA manifest, Service Worker |
 | `docs/preset-improvement-ideas.md` | 원본 프리셋 JSON 비교·개선 아이디어 |
+| `docs/pdf-export-improvement.md` | PDF 정교화 방안(트랙 A/B), 페이지 나눔 문법 안내 |
 
 ---
 
@@ -72,4 +76,4 @@
 
 ---
 
-*마지막 업데이트: 2026-02-06 — Phase 1~4, 3.1, 3.1-5, 5-1/5-7/5-5 반영*
+*마지막 업데이트: 2026-02-06 — PDF/페이지 나눔 보강(푸터 인쇄 반영, 페이지 번호 시작·형식·맞춤) 반영*

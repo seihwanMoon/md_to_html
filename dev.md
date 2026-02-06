@@ -24,7 +24,7 @@
   - 표 스타일/제목 스타일
   - 페이지 나누기(H1/H2/H3)
   - 특수 페이지(표지/목차/간지), 목차 깊이·박스형 제목 깊이
-  - 헤더/푸터 옵션(맞춤 텍스트 6필드 포함)
+  - 헤더/푸터 옵션(맞춤 텍스트 6필드 포함, 페이지 번호 시작·형식·맞춤 형식)
   - 커스텀 CSS (내보내기용)
   - 기타(줄바꿈 변환/이모지/구문 강조/배경 인쇄/특수페이지 헤더/푸터 숨기기)
 - 프리셋 저장/적용/삭제/내보내기/가져오기
@@ -104,6 +104,22 @@
 - Phase 5-1 프레젠테이션 모드 *(2026-02-06)* — `---` 슬라이드 구분, 풀스크린, 키보드/버튼 이동
 - Phase 5-7 커스텀 CSS 주입 *(2026-02-06)* — 설정 `customCss`, 내보내기 HTML에 스타일 주입
 - Phase 5-5 DOCX 내보내기 *(2026-02-06)* — `docx` 패키지, 제목/표/목록/인용/코드 등 지원
+- **DOCX 내보내기 개선** *(2026-02-06)*
+  - 1단계: 기본 스타일 반영 (state.settings 폰트/크기/줄간격/여백, A4, SectionProperties)
+  - 2단계: 프론트매터·표지/목차/간지 페이지 (coverPage, tocPage, dividerPage, tocDepth)
+  - 3단계: 헤더/푸터 3열 (title/date/pageNumber/custom, headerFontSize/footerFontSize)
+  - 4단계: 박스형 제목 (headingStyle, headingBoxDepth, Shading·Border)
+  - 5단계: Base64 이미지 지원 (![alt](data:image/...))
+  - 6단계 각주는 미구현 (선택)
+- **PDF 정교화 방안** *(2026-02-06)* — DOCX 한계를 보완하기 위해 PDF를 메인 출력 채널로 강화하는 제안. **`docs/pdf-export-improvement.md`** 참고. 트랙 A(현재 인쇄 경로 품질 극대화), 트랙 B(클라이언트 PDF 직접 다운로드, html2pdf.js 등).
+- **페이지 나눔 문법 (PDF)** *(2026-02-06)* — 원하는 위치에서 페이지 나누기: 마크다운에 `\newpage`, `[pagebreak]`, `<!-- pagebreak -->` 중 하나를 한 줄로 넣으면, 인쇄/PDF에서 해당 위치에 `page-break-before: always` 로 정확히 반영. 트랙 A(인쇄 경로)가 이 용도에 적합.
+- **페이지 나누기 버튼** *(2026-02-06)* — 포맷바에 "페이지 나누기" 버튼 추가. 클릭 시 커서 위치에 `\newpage` 삽입.
+- **페이지 나눔 시 헤더/푸터 반복** *(2026-02-06)* — `\newpage`가 있으면 본문을 구간으로 나누고, 각 구간마다 헤더·푸터를 DOM에 반복해 인쇄/PDF 시 각 "페이지"에 헤더·푸터가 나오도록 함.
+- **미리보기 = PDF처럼 페이지 단위 표시** *(2026-02-06)* — `\newpage`가 있을 때 미리보기에서 각 구간을 `.preview-page`로 감싸 A4 높이(297mm) 박스·그림자로 표시, "↓ 다음 페이지" 구분선.
+- **푸터 A4 하단 고정** *(2026-02-06)* — 인쇄용에서 각 구간을 `.segment-page`(min-height: 297mm, flex column) + `.segment-body`(flex: 1)로 감싸 푸터가 A4 용지 하단에 오도록 함.
+- **페이지 번호 동적 표시** *(2026-02-06)* — 헤더/푸터의 "페이지 번호"를 고정 "1/1" 대신 CSS `counter(page) " / " counter(pages)` 로 출력해 인쇄 시 실제 현재/총 페이지 표시.
+- **페이지 나눔 시 푸터 PDF 반영** *(2026-02-06)* — `@media print`에서 `.segment-page` 내 헤더/푸터는 `position: static` 유지(브라우저 `position: running()` 미지원으로 푸터가 빠지던 문제 해결). `.segment-page` 높이를 인쇄용 콘텐츠 영역 `calc(297mm - margin.top - margin.bottom)`에 맞춰 푸터가 페이지 하단에 고정. 미리보기 `.preview-page`도 flex + `.preview-page-body`로 푸터 하단 고정.
+- **페이지 번호 사용자 설정** *(2026-02-06)* — 페이지 나눔(`\newpage` 등) 사용 시 세그먼트별로 실제 번호를 HTML에 주입(1/5, 2/5 …). 설정 푸터: **페이지 번호 시작**(첫 페이지 번호), **페이지 번호 형식**(현재/총, 현재만, 맞춤), **맞춤 형식**(`{{page}}`, `{{total}}` 플레이스홀더). 페이지 나눔 없을 때는 빈 span + CSS `counter` 유지(`.hwp-page-number:empty::after`).
 
 ## 해결된 이슈
 - 문서설정 팝업이 X 클릭으로 닫히지 않던 문제
@@ -121,6 +137,12 @@
 - PDF 내보내기 버튼 클릭 시 Google 로그인/검색 창 등 다른 사이트가 열리던 문제 *(Phase 4 준비)*
   - **원인**: `window.open(blobUrl)` 호출 시 팝업이 차단되거나 브라우저가 기본 새 탭(Google 등)을 열어, 우리 문서 대신 다른 페이지가 표시됨.
   - **해결(근본)**: **`window.open` 사용 제거.** 같은 페이지에 숨겨진 **iframe**을 만들고, iframe의 **src**에 내보내기 HTML의 **Blob URL**을 넣어 로드. iframe `onload`에서 `iframe.contentWindow.print()`만 호출 → **새 탭/창을 전혀 열지 않음**, 인쇄 대화상자만 표시. iframe 크기 210mm×297mm(인쇄 레이아웃용), 인쇄 후 2초 뒤 iframe 제거 및 URL 해제. 클릭 시 `stopPropagation()` 추가로 이벤트 전파 차단.
+- 페이지 나눔 시 푸터가 PDF에 나오지 않던 문제 *(2026-02-06)*
+  - **원인**: `@media print`에서 `.hwp-header`/`.hwp-footer`에 `position: running()`을 적용해 세그먼트 내 헤더/푸터가 문서 흐름에서 빠짐(브라우저 running 지원 제한). `.segment-page` 높이(297mm)가 @page 여백을 고려하지 않아 푸터가 다음 페이지로 밀림.
+  - **해결**: `.segment-page .hwp-header`, `.segment-page .hwp-footer`에 `position: static` 유지. `.segment-page` 높이를 `calc(297mm - margin.top - margin.bottom)`로 조정. `.segment-body`에 `overflow: hidden`으로 한 페이지 내 고정.
+- 페이지 번호가 0/0으로만 나오던 문제 *(2026-02-06)*
+  - **원인**: CSS `counter(page)/counter(pages)`는 인쇄 시에만 채워지며, 페이지 나눔 시 세그먼트별로 값을 넣지 않아 미리보기/인쇄에서 0/0 또는 빈 칸.
+  - **해결**: 페이지 나눔 시 세그먼트별로 `buildHeader(frontmatter, pageInfo)`, `buildFooter(frontmatter, pageInfo)` 호출해 실제 번호(1/5, 2/5 등)를 HTML에 주입. 설정에 페이지 번호 시작·형식(현재/총, 현재만, 맞춤)·맞춤 형식({{page}}, {{total}}) 추가. CSS는 빈 span일 때만 `.hwp-page-number:empty::after`로 counter 사용.
 
 ## 원본 사이트 HTML 내보내기 분석 (참고)
 
@@ -169,9 +191,9 @@
 - `app.js` — (레거시, 참고용) 이전 단일 파일 로직. 실제 동작은 `src/` 모듈 사용
 - `src/main.js` — 진입점, 초기화·모달·액션·SW 등록
 - `src/state.js` — 단일 state, loadSettings/saveSettings/loadMarkdown/loadPresets
-- `src/constants.js` — DEFAULT_SETTINGS, DEFAULT_MARKDOWN, HELP_STEPS, EMOJI_MAP, getTemplates()
+- `src/constants.js` — DEFAULT_SETTINGS(페이지 번호 시작·형식·맞춤 포함), DEFAULT_MARKDOWN, HELP_STEPS, EMOJI_MAP, getTemplates()
 - `src/utils.js` — getMargin, getTextIndent, escapeHtml, formatDate, slugify, downloadFile, normalizeImportedPresetSettings
-- `src/render.js` — markdown-it, buildDocumentHtml, buildBaseStyles, parseFrontmatter, renderMarkdown
+- `src/render.js` — markdown-it, buildDocumentHtml, buildBaseStyles, parseFrontmatter, renderMarkdown, buildHeader/Footer(frontmatter, pageInfo), 페이지 번호 형식 주입
 - `src/editor.js` — 툴바·에디터 이벤트, undo/redo, 검색·치환, 이모지 자동완성
 - `src/preview.js` — updatePreview, setZoom, syncPreviewScroll, debouncedPreview
 - `src/settings.js` — bindSettings, handleSettingsChange, refreshSettingsForm
@@ -382,6 +404,8 @@
 | **Phase 5-1** | 프레젠테이션 모드 (--- 슬라이드, 풀스크린) |
 | **Phase 5-7** | 커스텀 CSS 주입 (내보내기 스타일) |
 | **Phase 5-5** | DOCX 내보내기 (Word 문서 생성) |
+| **PDF/페이지 나눔** | 페이지 나눔 문법(\newpage 등), 페이지 나누기 버튼, 헤더/푸터 구간별 반복, 미리보기 페이지 단위(.preview-page), 푸터 A4 하단(.segment-page), 페이지 번호 counter(page)/counter(pages) |
+| **PDF/페이지 나눔 보강** | 푸터 인쇄 반영(segment 내 position:static·높이 calc(297mm-margin)), 미리보기 flex 푸터 하단, 페이지 번호 설정(시작·형식·맞춤 {{page}}/{{total}}) |
 
 ---
 
@@ -416,4 +440,4 @@
 - 로컬에서 `index.html` 직접 열면 ES 모듈 경로 때문에 동작하지 않을 수 있음 — Vite 서버 사용 권장
 - **의존성**: markdown-it, highlight.js, katex, mermaid, docx (npm)
 - **원본 사이트**: `https://md.takjakim.kr/` (Vite 기반, 소스 비공개) · 개발자: takjakim
-- **문서 최신화**: 2026-02-06 — Phase 1~4, 3.1, 3.1-5, 5-1/5-7/5-5 완료 반영. 다음 세션은 `CONTINUE.md` 먼저 참고.
+- **문서 최신화**: 2026-02-06 — Phase 1~5-5, DOCX 개선, PDF/페이지 나눔 보강(푸터 인쇄 반영, 페이지 번호 시작·형식·맞춤) 반영. 다음 세션은 `CONTINUE.md` 먼저 참고.

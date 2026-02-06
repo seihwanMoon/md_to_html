@@ -107,7 +107,10 @@ function extractHeadings(tokens) {
   return headings;
 }
 
-function resolveHeaderFooterValue(type, frontmatter, slot) {
+/**
+ * @param {object} [pageInfo] - 페이지 나눔 시 { segmentIndex, totalSegments }. 있으면 실제 번호를 넣고, 없으면 CSS counter용 빈 span.
+ */
+function resolveHeaderFooterValue(type, frontmatter, slot, pageInfo) {
   if (type === "none") return "";
   if (type === "custom" && slot) {
     const customKey = slot + "Custom";
@@ -116,15 +119,30 @@ function resolveHeaderFooterValue(type, frontmatter, slot) {
   }
   if (type === "title") return escapeHtml(frontmatter.title || "");
   if (type === "date") return escapeHtml(frontmatter.date || formatDate(new Date()));
-  if (type === "page" || type === "pageNumber") return "1 / 1";
+  if (type === "page" || type === "pageNumber") {
+    if (pageInfo && pageInfo.segmentIndex != null && pageInfo.totalSegments != null) {
+      const start = Math.max(1, parseInt(state.settings.pageNumberStart, 10) || 1);
+      const current = start + (pageInfo.segmentIndex - 1);
+      const total = pageInfo.totalSegments;
+      const fmt = state.settings.pageNumberFormat || "current/total";
+      const custom = state.settings.pageNumberCustom || "{{page}} / {{total}}";
+      let text;
+      if (fmt === "current") text = String(current);
+      else if (fmt === "custom") text = custom.replace(/\{\{page\}\}/g, String(current)).replace(/\{\{total\}\}/g, String(total));
+      else text = `${current} / ${total}`;
+      return `<span class="hwp-page-number">${escapeHtml(text)}</span>`;
+    }
+    return '<span class="hwp-page-number"></span>';
+  }
   return "";
 }
 
-function buildHeader(frontmatter) {
+/** @param {object} [pageInfo] - { segmentIndex, totalSegments } 페이지 나눔 시에만 전달 */
+function buildHeader(frontmatter, pageInfo) {
   const s = state.settings;
-  const left = resolveHeaderFooterValue(s.headerLeft, frontmatter, "headerLeft");
-  const center = resolveHeaderFooterValue(s.headerCenter, frontmatter, "headerCenter");
-  const right = resolveHeaderFooterValue(s.headerRight, frontmatter, "headerRight");
+  const left = resolveHeaderFooterValue(s.headerLeft, frontmatter, "headerLeft", pageInfo);
+  const center = resolveHeaderFooterValue(s.headerCenter, frontmatter, "headerCenter", pageInfo);
+  const right = resolveHeaderFooterValue(s.headerRight, frontmatter, "headerRight", pageInfo);
   return `<header class="hwp-header">
     <div>${left}</div>
     <div>${center}</div>
@@ -132,11 +150,12 @@ function buildHeader(frontmatter) {
   </header>`;
 }
 
-function buildFooter(frontmatter) {
+/** @param {object} [pageInfo] - { segmentIndex, totalSegments } 페이지 나눔 시에만 전달 */
+function buildFooter(frontmatter, pageInfo) {
   const s = state.settings;
-  const left = resolveHeaderFooterValue(s.footerLeft, frontmatter, "footerLeft");
-  const center = resolveHeaderFooterValue(s.footerCenter, frontmatter, "footerCenter");
-  const right = resolveHeaderFooterValue(s.footerRight, frontmatter, "footerRight");
+  const left = resolveHeaderFooterValue(s.footerLeft, frontmatter, "footerLeft", pageInfo);
+  const center = resolveHeaderFooterValue(s.footerCenter, frontmatter, "footerCenter", pageInfo);
+  const right = resolveHeaderFooterValue(s.footerRight, frontmatter, "footerRight", pageInfo);
   return `<footer class="hwp-footer">
     <div>${left}</div>
     <div>${center}</div>
@@ -189,12 +208,20 @@ function buildBaseStyles({ forExport }) {
   };
   const fontStack = fontMap[s.fontFamily] || fontMap["nanum-gothic"];
 
+  /* 인쇄 시 페이지당 콘텐츠 영역 높이 (A4 297mm - 상하 여백). 세그먼트 푸터가 페이지 하단에 오도록 사용 */
+  const segmentPrintHeight = `calc(297mm - ${margin.top} - ${margin.bottom})`;
   return `
     @page { size: A4; margin: ${margin.top} ${margin.right} ${margin.bottom} ${margin.left}; }
     @media print {
       body { margin: 0; }
+      /* running()은 브라우저 지원이 제한적이며, 세그먼트 내 헤더/푸터는 흐름에 남겨야 PDF에 반영됨 */
       .hwp-header { position: running(hwpHeader); }
       .hwp-footer { position: running(hwpFooter); }
+      .segment-page .hwp-header { position: static; }
+      .segment-page .hwp-footer { position: static; }
+      .hwp-page-number:empty::after { content: counter(page) " / " counter(pages); }
+      .segment-page { min-height: ${segmentPrintHeight}; height: ${segmentPrintHeight}; display: flex; flex-direction: column; page-break-after: always; }
+      .segment-body { flex: 1; min-height: 0; overflow: hidden; }
       .hwp-cover-page, .hwp-toc-page, .hwp-divider-page { page-break-after: always; }
       table, pre, blockquote, img { page-break-inside: avoid; }
       h1, h2, h3, h4, h5, h6 { page-break-after: avoid; page-break-inside: avoid; }
@@ -276,6 +303,14 @@ function buildBaseStyles({ forExport }) {
     .hwp-content { transform: scale(${scale}); transform-origin: top left; }
     ${breakStyles}
     .special-hide .hwp-header, .special-hide .hwp-footer { display: none; }
+    .page-break { page-break-before: always; height: 0; overflow: hidden; margin: 0; padding: 0; border: none; display: block; }
+    @media screen {
+      .page-break { margin: 0.5em 0 1em; height: 0; border: none; display: block; }
+      .page-break::before { content: "↓ 다음 페이지"; display: block; text-align: center; color: #999; font-size: 0.85em; }
+      .preview-page { min-height: 297mm; display: flex; flex-direction: column; background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,0.1); margin-bottom: 1.5em; padding: 15mm 20mm; box-sizing: border-box; border: 1px solid #e5e5e5; }
+      .preview-page .preview-page-body { flex: 1; min-height: 0; }
+      .preview-page:last-child { margin-bottom: 0; }
+    }
     .footnote-ref a { color: #0563c1; text-decoration: none; font-size: 0.8em; }
     .footnotes-sep { margin-top: 2em; }
     .footnotes { font-size: 9pt; color: #555; }
@@ -285,14 +320,24 @@ function buildBaseStyles({ forExport }) {
   `;
 }
 
+/** 마크다운 본문에서 "페이지 나눔" 문법을 HTML로 치환 (라인 단위). \newpage, [pagebreak]. 코드 블록(4칸 들여쓰기) 내부는 제외. */
+function injectPageBreakHtml(text) {
+  const pageBreakDiv = '<div class="page-break"></div>';
+  return text
+    .replace(/^[ \t]{0,3}\\newpage[ \t]*$/gm, pageBreakDiv)
+    .replace(/^[ \t]{0,3}\[pagebreak\][ \t]*$/gim, pageBreakDiv);
+}
+
 export function renderMarkdown(content) {
   md.set({ breaks: state.settings.breaks });
   const { frontmatter, body } = parseFrontmatter(content);
-  const source = state.settings.emoji ? replaceEmojis(body) : body;
+  let source = state.settings.emoji ? replaceEmojis(body) : body;
+  source = injectPageBreakHtml(source);
   const env = {};
   const tokens = md.parse(source, env);
   const headings = extractHeadings(tokens);
   let html = md.renderer.render(tokens, md.options, env);
+  html = html.replace(/<!--\s*pagebreak\s*-->/gi, '<div class="page-break"></div>').replace(/<!--\s*newpage\s*-->/gi, '<div class="page-break"></div>');
   html = renderFootnotes(html);
   html = renderKatex(html);
   const tocHtml = headings
@@ -340,6 +385,36 @@ export function buildDocumentHtml(content, { forExport }) {
   <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });<\/script>`
     : "";
 
+  const pageBreakRegex = /<div\s+class="page-break"\s*>\s*<\/div>/g;
+  const hasPageBreaks = pageBreakRegex.test(bodyHtml);
+  let mainContent = bodyHtml;
+  if (hasPageBreaks) {
+    const segments = bodyHtml.split(/<div\s+class="page-break"\s*>\s*<\/div>/);
+    const totalSegments = segments.length;
+    const pageBreakDiv = '<div class="page-break"></div>';
+    if (forExport) {
+      mainContent = segments
+        .map((seg, i) => {
+          const pageInfo = { segmentIndex: i + 1, totalSegments };
+          const segHeader = state.settings.headerEnabled ? buildHeader(frontmatter, pageInfo) : "";
+          const segFooter = state.settings.footerEnabled ? buildFooter(frontmatter, pageInfo) : "";
+          return `<div class="segment-page">${segHeader}<div class="segment-body">${seg}</div>${segFooter}</div>`;
+        })
+        .join("");
+    } else {
+      mainContent = segments
+        .map((seg, i) => {
+          const pageInfo = { segmentIndex: i + 1, totalSegments };
+          const segHeader = state.settings.headerEnabled ? buildHeader(frontmatter, pageInfo) : "";
+          const segFooter = state.settings.footerEnabled ? buildFooter(frontmatter, pageInfo) : "";
+          return `<div class="preview-page">${segHeader}<div class="preview-page-body">${seg}</div>${segFooter}</div>`;
+        })
+        .join(pageBreakDiv);
+    }
+  }
+
+  const showGlobalHeaderFooter = !hasPageBreaks;
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -352,12 +427,12 @@ export function buildDocumentHtml(content, { forExport }) {
   ${(state.settings.customCss || "").trim() ? `<style>/* 커스텀 CSS */\n${state.settings.customCss.trim()}</style>` : ""}
 </head>
 <body class="${hideHeaderFooterClass}">
-  ${state.settings.headerEnabled ? header : ""}
+  ${showGlobalHeaderFooter && state.settings.headerEnabled ? header : ""}
   ${cover}
   ${toc}
   ${divider}
-  <main class="hwp-content ${headingClass}">${bodyHtml}</main>
-  ${state.settings.footerEnabled ? footer : ""}
+  <main class="hwp-content ${headingClass}">${mainContent}</main>
+  ${showGlobalHeaderFooter && state.settings.footerEnabled ? footer : ""}
   ${mermaidScript}
 </body>
 </html>`;

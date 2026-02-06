@@ -84,6 +84,7 @@ export function normalizeImportedPresetSettings(imported) {
     "headerLeft", "headerCenter", "headerRight", "footerLeft", "footerRight",
     "headerLeftCustom", "headerCenterCustom", "headerRightCustom",
     "footerLeftCustom", "footerCenterCustom", "footerRightCustom",
+    "pageNumberStart", "pageNumberFormat", "pageNumberCustom",
     "tocDepth", "headingBoxDepth", "customCss",
     "printBackground"].forEach((k) => {
     if (imported[k] !== undefined) out[k] = imported[k];

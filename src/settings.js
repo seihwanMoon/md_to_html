@@ -36,6 +36,9 @@ const bindings = {
   footerLeftCustom: "footerLeftCustom",
   footerCenterCustom: "footerCenterCustom",
   footerRightCustom: "footerRightCustom",
+  pageNumberStart: "pageNumberStart",
+  pageNumberFormat: "pageNumberFormat",
+  pageNumberCustom: "pageNumberCustom",
   tocDepth: "tocDepth",
   headingBoxDepth: "headingBoxDepth",
   customCss: "customCss",
@@ -69,9 +72,12 @@ function syncSettingsToForm() {
     const val = s[key];
     if (el.type === "checkbox") el.checked = !!val;
     else if (key === "scale") el.value = Number(val);
+    else if (key === "pageNumberStart") el.value = Math.max(1, parseInt(val, 10) || 1);
     else if (key === "tocDepth" || key === "headingBoxDepth") el.value = String(Math.min(6, Math.max(1, Number(val) || 3)));
     else el.value = val != null ? val : "";
   });
+  const pageNumberCustomEl = document.querySelector(".page-number-custom-field");
+  if (pageNumberCustomEl) pageNumberCustomEl.style.display = s.pageNumberFormat === "custom" ? "" : "none";
   customPairs.forEach(([selId, customId]) => {
     const sel = document.getElementById(selId);
     const customEl = document.getElementById(customId);
@@ -124,12 +130,16 @@ export function bindSettings() {
       }
       return;
     }
-    el.value = key === "scale" ? Number(state.settings[key]) : (key === "tocDepth" || key === "headingBoxDepth" ? String(state.settings[key] ?? 3) : (state.settings[key] ?? ""));
+    el.value = key === "scale" ? Number(state.settings[key]) : (key === "tocDepth" || key === "headingBoxDepth" ? String(state.settings[key] ?? 3) : (key === "pageNumberStart" ? Math.max(1, parseInt(state.settings[key], 10) || 1) : (state.settings[key] ?? "")));
     if (!el.dataset.bound) {
       el.addEventListener("change", () => {
         if (key === "tocDepth" || key === "headingBoxDepth") state.settings[key] = Math.min(6, Math.max(1, parseInt(el.value, 10) || 3));
+        else if (key === "pageNumberStart") state.settings[key] = Math.max(1, parseInt(el.value, 10) || 1);
         else if (el.type === "number") state.settings[key] = Number(el.value);
         else state.settings[key] = el.value;
+        if (key === "pageNumberFormat" && document.querySelector(".page-number-custom-field")) {
+          document.querySelector(".page-number-custom-field").style.display = el.value === "custom" ? "" : "none";
+        }
         syncSettingsToForm();
         handleSettingsChange();
       });

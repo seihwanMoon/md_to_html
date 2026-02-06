@@ -158,6 +158,7 @@ export function handleInsert(type) {
     checklist: { open: "\n- [ ] ", close: "" },
     quote: { open: "\n> ", close: "" },
     hr: { open: "\n\n---\n\n", close: "" },
+    pagebreak: { open: "\n\n\\newpage\n\n", close: "" },
     link: { open: "[링크 텍스트](", close: ")" },
     image: { open: "![이미지 설명](", close: ")" },
     "code-block": { open: "\n```javascript\n", close: "\n```\n" },
