@@ -1,10 +1,13 @@
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js";
 import katex from "katex";
+import container from "markdown-it-container";
 import { state } from "./state.js";
 import { EMOJI_MAP } from "./constants.js";
 import { getMargin, getTextIndent, escapeHtml, formatDate } from "./utils.js";
 import { slugify } from "./utils.js";
+
+const CALLOUT_TYPES = ["info", "warning", "tip", "note", "danger"];
 
 function replaceEmojis(text) {
   return text.replace(/:([a-z0-9_]+):/g, (match, name) => EMOJI_MAP[name] || match);
@@ -84,6 +87,17 @@ md.renderer.rules.table_open = function (tokens, idx, options, env, self) {
   token.attrSet("cellpadding", "0");
   return originalTableOpen(tokens, idx, options, env, self);
 };
+
+CALLOUT_TYPES.forEach((name) => {
+  md.use(container, name, {
+    render(tokens, idx) {
+      if (tokens[idx].nesting === 1) {
+        return `<div class="callout callout-${name}">\n`;
+      }
+      return "</div>\n";
+    },
+  });
+});
 
 function renderFootnotes(html) {
   const footnotes = [];
@@ -329,6 +343,13 @@ function buildBaseStyles({ forExport }) {
     table caption { caption-side: top; text-align: left; font-size: 9pt; font-weight: bold; padding: 4px 0; color: #333; }
     blockquote { border-left: 3px solid #333; background: #f9f9f9; padding: 0.5em 1em; margin: 1em 0; color: #222; page-break-inside: avoid; }
     blockquote p { text-indent: 0; }
+    .callout { padding: 0.8em 1.2em; margin: 1em 0; border-radius: 4px; border-left: 4px solid; page-break-inside: avoid; }
+    .callout p { text-indent: 0; margin: 0.3em 0; }
+    .callout-info { background: #e8f4fd; border-left-color: #2196f3; }
+    .callout-warning { background: #fff8e6; border-left-color: #ff9800; }
+    .callout-tip { background: #e8f5e9; border-left-color: #4caf50; }
+    .callout-note { background: #f5f5f5; border-left-color: #9e9e9e; }
+    .callout-danger { background: #ffebee; border-left-color: #f44336; }
     pre { background: #f5f5f5; border: 1px solid #ddd; padding: 12px 16px; border-radius: 2px; overflow-x: auto; font-size: 9pt; white-space: pre-wrap; word-wrap: break-word; page-break-inside: avoid; }
     code { font-family: 'D2Coding', 'Nanum Gothic Coding', 'Consolas', 'Courier New', monospace; }
     :not(pre):not(.hljs) > code { background: #f0f0f0; padding: 0.15em 0.3em; border-radius: 2px; font-size: 0.9em; border: 1px solid #e0e0e0; }
@@ -397,11 +418,22 @@ function injectPageBreakHtml(text) {
     .replace(/^[ \t]{0,3}\[pagebreak\][ \t]*$/gim, pageBreakDiv);
 }
 
+/** 위키 링크 [[문서명]] → [문서명](#slug) (5.1). [[문서명|표시]] 지원. */
+function convertWikiLinks(text) {
+  return text.replace(/\[\[([^\]|]+)(?:\|([^\]]*))?\]\]/g, (_, target, display) => {
+    const t = (target || "").trim();
+    const d = (display !== undefined ? display : t).trim();
+    if (!t) return "[[";
+    return `[${d}](#${slugify(t)})`;
+  });
+}
+
 export function renderMarkdown(content) {
   md.set({ breaks: state.settings.breaks });
   const { frontmatter, body } = parseFrontmatter(content);
   let source = state.settings.emoji ? replaceEmojis(body) : body;
   source = injectPageBreakHtml(source);
+  source = convertWikiLinks(source);
   const env = {};
   const tokens = md.parse(source, env);
   const headings = extractHeadings(tokens);
@@ -455,11 +487,12 @@ export function buildDocumentHtml(content, { forExport }) {
   <script>mermaid.initialize({ startOnLoad: true, theme: 'default' });<\/script>`
     : "";
 
-  const pageBreakRegex = /<div\s+class="page-break"\s*>\s*<\/div>/g;
-  const hasPageBreaks = pageBreakRegex.test(bodyHtml);
+  const pageBreakPattern = /<div\s+class=["']page-break["']\s*>\s*<\/div>/g;
+  const hasPageBreaks = pageBreakPattern.test(bodyHtml);
+  pageBreakPattern.lastIndex = 0;
   let mainContent = bodyHtml;
   if (hasPageBreaks) {
-    const segments = bodyHtml.split(/<div\s+class="page-break"\s*>\s*<\/div>/);
+    const segments = bodyHtml.split(/<div\s+class=["']page-break["']\s*>\s*<\/div>/);
     const totalSegments = segments.length;
     const pageBreakDiv = '<div class="page-break"></div>';
     if (forExport) {

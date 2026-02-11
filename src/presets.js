@@ -53,6 +53,8 @@ export function applyPreset(index) {
   if (typeof window.refreshSettingsForm === "function") window.refreshSettingsForm();
   bindSettings();
   preview.updatePreview();
+  const presetModal = document.getElementById("presetModal");
+  if (presetModal) presetModal.hidden = true;
 }
 
 export function deletePreset(index) {

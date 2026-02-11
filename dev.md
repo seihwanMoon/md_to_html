@@ -120,6 +120,11 @@
 - **페이지 번호 동적 표시** *(2026-02-06)* — 헤더/푸터의 "페이지 번호"를 고정 "1/1" 대신 CSS `counter(page) " / " counter(pages)` 로 출력해 인쇄 시 실제 현재/총 페이지 표시.
 - **페이지 나눔 시 푸터 PDF 반영** *(2026-02-06)* — `@media print`에서 `.segment-page` 내 헤더/푸터는 `position: static` 유지(브라우저 `position: running()` 미지원으로 푸터가 빠지던 문제 해결). `.segment-page` 높이를 인쇄용 콘텐츠 영역 `calc(297mm - margin.top - margin.bottom)`에 맞춰 푸터가 페이지 하단에 고정. 미리보기 `.preview-page`도 flex + `.preview-page-body`로 푸터 하단 고정.
 - **페이지 번호 사용자 설정** *(2026-02-06)* — 페이지 나눔(`\newpage` 등) 사용 시 세그먼트별로 실제 번호를 HTML에 주입(1/5, 2/5 …). 설정 푸터: **페이지 번호 시작**(첫 페이지 번호), **페이지 번호 형식**(현재/총, 현재만, 맞춤), **맞춤 형식**(`{{page}}`, `{{total}}` 플레이스홀더). 페이지 나눔 없을 때는 빈 span + CSS `counter` 유지(`.hwp-page-number:empty::after`).
+- **미리보기 클릭 → 에디터 이동** *(2026-02-11)* — 미리보기에서 헤딩/목차/각주 링크(`#...`) 클릭 시 에디터에서 해당 위치로 스크롤 이동. `preview.js` `bindPreviewClickToEditor()`.
+- **프리셋별 미리보기** *(2026-02-11)* — 프리셋 적용 시 미리보기 즉시 반영, 모달 자동 닫기.
+- **위키 링크** *(2026-02-11)* — `[[문서명]]` → 헤딩 앵커 링크. `[[문서명|표시 텍스트]]` 지원. `render.js` `convertWikiLinks()`.
+- **콜아웃(Callout)** *(2026-02-11)* — `::: info`, `::: warning`, `::: tip`, `::: note`, `::: danger` 블록 지원. `markdown-it-container` 플러그인.
+- **페이지 나누기 버튼 최우측 배치** *(2026-02-11)* — 포맷바에서 "페이지 나누기" 버튼을 편집 메뉴 최우측으로 이동. `\newpage` 처리 보강: page-break div 감지 정규식에 `class=["']...["']` 패턴 추가.
 
 ## 한글(아래한글) HTML 호환 개선 (트랙 C, 2026-02-06 추가)
 - Phase C-1 *(기본 호환)*:
@@ -461,6 +466,6 @@
 ## 메모
 - **실행**: `npm run dev` (개발 서버 + HMR), `npm run build` 후 `npm run preview` 또는 `dist/` 배포
 - 로컬에서 `index.html` 직접 열면 ES 모듈 경로 때문에 동작하지 않을 수 있음 — Vite 서버 사용 권장
-- **의존성**: markdown-it, highlight.js, katex, mermaid, docx (npm)
+- **의존성**: markdown-it, markdown-it-container, highlight.js, katex, mermaid, docx (npm)
 - **원본 사이트**: `https://md.takjakim.kr/` (Vite 기반, 소스 비공개) · 개발자: takjakim
-- **문서 최신화**: 2026-02-06 — Phase 1~5-5, DOCX 개선, PDF/페이지 나눔 보강(푸터 인쇄 반영, 페이지 번호 시작·형식·맞춤) 반영. 다음 세션은 `CONTINUE.md` 먼저 참고.
+- **문서 최신화**: 2026-02-11 — 1.3~5.2 기능(미리보기 클릭→에디터, 프리셋 미리보기, 위키 링크, 콜아웃), 페이지 나누기 버튼 최우측 배치 반영. 다음 세션은 `CONTINUE.md` 먼저 참고.
